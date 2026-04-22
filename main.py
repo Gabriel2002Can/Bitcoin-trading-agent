@@ -1,34 +1,26 @@
-import requests 
-import os
-from dotenv import load_dotenv
-
-load_dotenv(".env")
+import yfinance as yf
+from calculations import calculate_metrics
 
 def get_data():
 
-    api_key = os.getenv("API_KEY") 
+    return yf.Ticker("BTC-USD")
 
-    response = requests.get(
-        "https://pro-api.coinmarketcap.com/v3/cryptocurrency/quotes/latest",
-        params={                  
-            "slug": "bitcoin",           
-            "convert": "USD"
-        },
-        headers={
-            "X-CMC_PRO_API_KEY": api_key
-        }
-    )
+BTC = get_data() 
 
-    return response
+print("Bitcoin Open : ", round(BTC.info['open'],0))
+print("        Day     : ", round(BTC.info['dayLow'], 0), "-", round(BTC.info['dayHigh'], 0))
+print("        52 Week : ", round(BTC.info['fiftyTwoWeekLow'], 0), "-", round(BTC.info['fiftyTwoWeekHigh'], 0))
 
-current_data = get_data().json() 
+CurrentPrice = BTC.fast_info['lastPrice']
 
-btc = current_data["data"][0]
+historic_data = BTC.history(period="1mo", interval="30m")
 
-quote_usd = btc["quote"][0]
+close = historic_data["Close"]
+high = historic_data["High"]
+low = historic_data["Low"]
 
-current_price = quote_usd["price"]
-percent_1h    = quote_usd["percent_change_1h"]
-
-print(f"Current BTC price: ${current_price:,.2f}")
-print(f"Percent change 1h: {percent_1h:.2f}%")
+metrics = calculate_metrics(historic_data, entry_price=CurrentPrice, k=2.0)
+print("Latest stop loss:", metrics["StopLoss"])
+print("Latest RSI:", metrics["RSI"].iloc[-1])
+print("Latest EMA:", metrics["EMA"].iloc[-1])
+print("Latest SMA:", metrics["SMA"].iloc[-1])
