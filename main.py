@@ -1,7 +1,5 @@
-import requests 
-import os
-from dotenv import load_dotenv
 import yfinance as yf
+from calculations import calculate_metrics
 
 def get_data():
 
@@ -15,6 +13,14 @@ print("        52 Week : ", round(BTC.info['fiftyTwoWeekLow'], 0), "-", round(BT
 
 CurrentPrice = BTC.fast_info['lastPrice']
 
-print(CurrentPrice)
+historic_data = BTC.history(period="1mo", interval="30m")
 
-print(BTC.info)
+close = historic_data["Close"]
+high = historic_data["High"]
+low = historic_data["Low"]
+
+metrics = calculate_metrics(historic_data, entry_price=CurrentPrice, k=2.0)
+print("Latest stop loss:", metrics["StopLoss"])
+print("Latest RSI:", metrics["RSI"].iloc[-1])
+print("Latest EMA:", metrics["EMA"].iloc[-1])
+print("Latest SMA:", metrics["SMA"].iloc[-1])
