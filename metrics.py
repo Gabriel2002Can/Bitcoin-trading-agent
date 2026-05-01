@@ -1,37 +1,42 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import pandas as pd
 
-
 MetricValue = Union[pd.Series, float]
 
-
 class Metrics:
-    """ Stores information about the current metrics gathered from the source
+    """Stores information about the current metrics gathered from the source.
     """
+
     def __init__(
         self,
-        atr_period: int = 14,
-        ema_span: int = 20,
-        sma_window: int = 20,
-        rsi_period: int = 14,
-        macd_fast: int = 12,
-        macd_slow: int = 26,
-        macd_signal: int = 9,
-        k: float = 2.0,
+        config: Optional[Union[Dict[str, Any], Any]] = None,
         data: Optional[pd.DataFrame] = None,
         entry_price: Optional[float] = None,
     ) -> None:
-        self.atr_period = atr_period
-        self.ema_span = ema_span
-        self.sma_window = sma_window
-        self.rsi_period = rsi_period
-        self.macd_fast = macd_fast
-        self.macd_slow = macd_slow
-        self.macd_signal = macd_signal
-        self.k = k
+        # defaults
+        defaults = {
+            "atr_period": 14,
+            "ema_span": 20,
+            "sma_window": 20,
+            "rsi_period": 14,
+            "macd_fast": 12,
+            "macd_slow": 26,
+            "macd_signal": 9,
+            "k": 2.0,
+        }
+
+        # read config values (support multiple potential key names)
+        self.atr_period = self._get_config_value(config, ["atr_period", "ATR Period"], int, defaults["atr_period"])
+        self.ema_span = self._get_config_value(config, ["ema_span", "EMA Span"], int, defaults["ema_span"])
+        self.sma_window = self._get_config_value(config, ["sma_window", "SMA Window"], int, defaults["sma_window"])
+        self.rsi_period = self._get_config_value(config, ["rsi_period", "RSI Period"], int, defaults["rsi_period"])
+        self.macd_fast = self._get_config_value(config, ["macd_fast", "MACD Fast"], int, defaults["macd_fast"])
+        self.macd_slow = self._get_config_value(config, ["macd_slow", "MACD Slow"], int, defaults["macd_slow"])
+        self.macd_signal = self._get_config_value(config, ["macd_signal", "MACD Signal"], int, defaults["macd_signal"])
+        self.k = self._get_config_value(config, ["k", "Stop Loss Multiplier", "stop_loss_multiplier"], float, defaults["k"])
 
         self.data = data
         self.entry_price = entry_price
@@ -39,6 +44,49 @@ class Metrics:
 
         if data is not None and entry_price is not None:
             self.calculate_metrics(data, entry_price)
+
+    def _get_config_value(self, config: Optional[Union[Dict[str, Any], Any]],
+                          names: List[str],
+                          cast_type: Any,
+                          default: Any) -> Any:
+
+        if config is None:
+            return default
+
+        # support Configuration-like object with `.all` attribute
+        cfg: Dict[str, Any]
+        if hasattr(config, "all") and isinstance(getattr(config, "all"), dict):
+            cfg = config.all  # type: ignore[arg-type]
+        elif isinstance(config, dict):
+            cfg = config
+        else:
+            cfg = {k: getattr(config, k, None) for k in dir(config) if not k.startswith("__")}
+
+        for name in names:
+            if name in cfg and cfg[name] is not None:
+                val = cfg[name]
+                try:
+                    return cast_type(val)
+                except Exception:
+                    try:
+                        return cast_type(str(val).strip())
+                    except Exception:
+                        return default
+
+        # try normalized keys (lower + underscores)
+        for name in names:
+            norm = name.lower().replace(" ", "_")
+            if norm in cfg and cfg[norm] is not None:
+                val = cfg[norm]
+                try:
+                    return cast_type(val)
+                except Exception:
+                    try:
+                        return cast_type(str(val).strip())
+                    except Exception:
+                        return default
+
+        return default
 
     def _calculate_atr(self, high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
         tr1 = high - low
