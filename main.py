@@ -1,15 +1,20 @@
-from calculations import calculate_metrics
+from metrics import Metrics
 from data import get_data
+from configuration import Configuration
 
 BTC = get_data()
 
-metrics = calculate_metrics(BTC['history'], entry_price=BTC['currentPrice'], k=2.0)
+metrics_info = Metrics(k=2.0, data=BTC["history"], entry_price=BTC["currentPrice"])
 
 print("Bitcoin Price Now : ", BTC['currentPrice'])
 print("Bitcoin Open : ", BTC['open'])
 print("        Day     : ", BTC['dayLow'], "-", BTC['dayHigh'])
 
-print("Latest stop loss:", metrics["StopLoss"])
-print("Latest RSI:", metrics["RSI"].iloc[-1])
-print("Latest EMA:", metrics["EMA"].iloc[-1])
-print("Latest SMA:", metrics["SMA"].iloc[-1])
+metrics_info.print_metric("StopLoss")
+metrics_info.print_metrics(["RSI", "EMA", "SMA"])
+
+config = Configuration()
+
+print("\n"*5)
+
+print(config.all)

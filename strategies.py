@@ -5,17 +5,15 @@ def trigger_stop_loss(current_price, stop_loss):
     return current_price <= stop_loss
 
 # -> This is the pseudo-code
-# def tick(config, state, data):
-#     metrics = compute_metrics(data)
+# def tick(config -> obj, data -> obj) -> None:
 
-#     dca_signal = evaluate_dca(metrics, state, config)
-#     swing_signal = evaluate_swing(metrics, state, config)
+#     dca_value, swing_signal = evaluate_strategies(metrics, config)
 
-#     decision = resolve_signals(dca_signal, swing_signal, config, state)
+#     result = execute_strategies(dca_value, swing_value)
 
-#     if decision:
-#         execute_trade(decision, state)
+#     notify(result)
 
-#     notify(decision)
+#     return None
 
-#     return decision
+def evaluate_strategies(metrics, config):
+    pass

@@ -1,0 +1,122 @@
+from __future__ import annotations
+
+from typing import Dict, List, Optional, Tuple, Union
+
+import pandas as pd
+
+
+MetricValue = Union[pd.Series, float]
+
+
+class Metrics:
+    """ Stores information about the current metrics gathered from the source
+    """
+    def __init__(
+        self,
+        atr_period: int = 14,
+        ema_span: int = 20,
+        sma_window: int = 20,
+        rsi_period: int = 14,
+        macd_fast: int = 12,
+        macd_slow: int = 26,
+        macd_signal: int = 9,
+        k: float = 2.0,
+        data: Optional[pd.DataFrame] = None,
+        entry_price: Optional[float] = None,
+    ) -> None:
+        self.atr_period = atr_period
+        self.ema_span = ema_span
+        self.sma_window = sma_window
+        self.rsi_period = rsi_period
+        self.macd_fast = macd_fast
+        self.macd_slow = macd_slow
+        self.macd_signal = macd_signal
+        self.k = k
+
+        self.data = data
+        self.entry_price = entry_price
+        self.metrics: Dict[str, MetricValue] = {}
+
+        if data is not None and entry_price is not None:
+            self.calculate_metrics(data, entry_price)
+
+    def _calculate_atr(self, high: pd.Series, low: pd.Series, close: pd.Series) -> pd.Series:
+        tr1 = high - low
+        tr2 = (high - close.shift(1)).abs()
+        tr3 = (low - close.shift(1)).abs()
+        tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+        return tr.ewm(alpha=1 / self.atr_period, adjust=False).mean()
+
+    def _calculate_stop_loss(self, entry_price: float, atr_value: float, position: str = "long") -> float:
+        if position == "long":
+            return entry_price - (self.k * atr_value)
+        return entry_price + (self.k * atr_value)
+
+    def _calculate_ema(self, close: pd.Series) -> pd.Series:
+        return close.ewm(span=self.ema_span, adjust=False).mean()
+
+    def _calculate_sma(self, close: pd.Series) -> pd.Series:
+        return close.rolling(window=self.sma_window, min_periods=self.sma_window).mean()
+
+    def _calculate_rsi(self, close: pd.Series) -> pd.Series:
+        delta = close.diff()
+        gain = delta.clip(lower=0)
+        loss = -delta.clip(upper=0)
+
+        avg_gain = gain.ewm(alpha=1 / self.rsi_period, min_periods=self.rsi_period, adjust=False).mean()
+        avg_loss = loss.ewm(alpha=1 / self.rsi_period, min_periods=self.rsi_period, adjust=False).mean()
+
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+        return rsi.fillna(100)
+
+    def _calculate_macd(self, close: pd.Series) -> Tuple[pd.Series, pd.Series, pd.Series]:
+        ema_fast = close.ewm(span=self.macd_fast, adjust=False).mean()
+        ema_slow = close.ewm(span=self.macd_slow, adjust=False).mean()
+        macd_line = ema_fast - ema_slow
+        signal_line = macd_line.ewm(span=self.macd_signal, adjust=False).mean()
+        histogram = macd_line - signal_line
+        return macd_line, signal_line, histogram
+
+    def calculate_metrics(self, data: pd.DataFrame, entry_price: float) -> Dict[str, MetricValue]:
+        self.data = data
+        self.entry_price = entry_price
+
+        close = data["Close"]
+        high = data["High"]
+        low = data["Low"]
+
+        atr = self._calculate_atr(high, low, close)
+        ema = self._calculate_ema(close)
+        sma = self._calculate_sma(close)
+        rsi = self._calculate_rsi(close)
+        macd_line, signal_line, macd_histogram = self._calculate_macd(close)
+
+        latest_atr = float(atr.iloc[-1])
+        stop_loss = self._calculate_stop_loss(entry_price, latest_atr)
+
+        self.metrics = {
+            "ATR": atr,
+            "StopLoss": stop_loss,
+            "EMA": ema,
+            "RSI": rsi,
+            "MACD": macd_line,
+            "MACD_signal": signal_line,
+            "MACD_histogram": macd_histogram,
+            "SMA": sma,
+        }
+        return self.metrics
+
+    def get_latest_value(self, metric_name: str) -> float:
+        metric = self.metrics[metric_name]
+        if isinstance(metric, pd.Series):
+            return float(metric.iloc[-1])
+        return float(metric)
+
+    def print_metric(self, metric_name: str) -> None:
+        print(f"{metric_name}: {self.get_latest_value(metric_name)}")
+
+    def print_metrics(self, metric_names: Optional[List[str]] = None) -> None:
+        names = metric_names if metric_names is not None else list(self.metrics.keys())
+        for metric_name in names:
+            self.print_metric(metric_name)
