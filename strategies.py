@@ -16,12 +16,15 @@ class TradingAgent:
         self.metrics = metrics
 
     def evaluate_strategies(self):
+        # get configs; get metrics; get model opinion; formulate a total value to each return variable (dca_value and swing_value)
         pass
 
     def execute_strategies(self):
+        # get the final report from the evaluate_strategies, return the final decision
         pass
 
     def notify(self):
+        # notify the final report via telegram and gmail
         pass
 
     def tick(self):
