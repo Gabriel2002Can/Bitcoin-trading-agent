@@ -1,24 +1,35 @@
-def dca(param = 1.0, value = 500):
-    return value * param
+from configuration import Configuration
+from metrics import Metrics
 
-def trigger_stop_loss(current_price, stop_loss):
-    return current_price <= stop_loss
+# def dca(param = 1.0, value = 500):
+#     return value * param
 
-# -> This is the pseudo-code
-# def tick(config -> obj, data -> obj) -> None:
-
-#     dca_value, swing_signal = evaluate_strategies(metrics, config)
-
-#     result = execute_strategies(dca_value, swing_value)
-
-#     notify(result)
-
-#     return None
-
-def evaluate_strategies(metrics, config):
-    pass
+# def trigger_stop_loss(current_price, stop_loss):
+#     return current_price <= stop_loss
 
 class TradingAgent:
+    """Uses metrics and the current configurations to evaluate which strategy should be used and its paramethers.
+    """
 
-    def __init__(self):
+    def __init__(self, configuration: Configuration, metrics: Metrics):
+        self.configuration = configuration
+        self.metrics = metrics
+
+    def evaluate_strategies(self):
         pass
+
+    def execute_strategies(self):
+        pass
+
+    def notify(self):
+        pass
+
+    def tick(self):
+        
+        dca_value, swing_value = self.evaluate_strategies()
+
+        result = self.execute_strategies(dca_value, swing_value)
+
+        self.notify(result)
+
+        return None
