@@ -17,3 +17,8 @@ def trigger_stop_loss(current_price, stop_loss):
 
 def evaluate_strategies(metrics, config):
     pass
+
+class TradingAgent:
+
+    def __init__(self):
+        pass
