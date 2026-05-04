@@ -27,7 +27,7 @@ class TradingAgent:
         raw_dca = self.configuration.all.get("DCA Trigger", None)
 
         return {
-            "strategy": self.configuration.all.get("Strategy", "Long Term"),
+            "strategy": self.configuration.all.get("strategy", "Long Term"),
             "current_price": self.metrics.entry_price,
             "previous_close": prev_close,
             "price_change_pct": price_change_pct,
@@ -45,6 +45,29 @@ class TradingAgent:
     def evaluate_strategies(self):
         context = self.build_context()
         opinion = self.model.analyze(context)
+
+        # Bug Fixed It
+        # normalize opinion: the model may return a ChatCompletionMessage-like
+        # object whose `content` is a JSON string. Parse it into a dict.
+        try:
+            import json
+
+            if isinstance(opinion, dict):
+                pass
+            else:
+                content = None
+                if hasattr(opinion, "content"):
+                    content = opinion.content
+                elif isinstance(opinion, str):
+                    content = opinion
+                elif hasattr(opinion, "message") and hasattr(opinion.message, "content"):
+                    content = opinion.message.content
+
+                if content:
+                    parsed = json.loads(content)
+                    opinion = parsed
+        except Exception:
+            pass
         base_dca = float(self.configuration.all.get("DCA Amount", 500))
 
         # parse DCA trigger into a fraction ('3%' -> 0.03)
@@ -71,7 +94,7 @@ class TradingAgent:
         # compute price drop pct (negative when price fell)
         price_change = context.get("price_change_pct", 0.0)
 
-        strategy = str(context.get("strategy", "Long Term")).strip().lower()
+        strategy = str(context.get("strategy", self.configuration.all.get("Strategy", "Long Term"))).strip().lower()
 
         # Strategy selection is authoritative and determines rule set
         if strategy == "long term" or strategy == "long_term" or strategy == "long-term":

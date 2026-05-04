@@ -25,3 +25,7 @@ print(config.all)
 print("\n"*5)
 
 print(trading_agent.tick())
+
+print("\n"*5)
+
+print(trading_agent.model.analyze(trading_agent.build_context()))
