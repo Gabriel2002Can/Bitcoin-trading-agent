@@ -13,8 +13,8 @@ class TradingAgent:
 
     def build_context(self):
         return {
-            "strategy": self.configuration.all.get("Strategy", "dca"), # IMPLEMENT STRATEGY
-            "current_price": self.metrics.entry_price, # REVIEW
+            "strategy": self.configuration.all.get("Strategy", "Long Term"),
+            "current_price": self.metrics.entry_price,
             "stop_loss": self.metrics.get_latest_value("StopLoss"),
             "rsi": self.metrics.get_latest_value("RSI"),
             "ema": self.metrics.get_latest_value("EMA"),
@@ -29,7 +29,7 @@ class TradingAgent:
         context = self.build_context()
         opinion = self.model.analyze(context)
 
-        base_dca = float(self.configuration.all.get("DCA Amount", 500)) # IMPLEMENT
+        base_dca = float(self.configuration.all.get("DCA Amount", 500)) 
         confidence = float(opinion["confidence"])
 
         if opinion["bias"] == "bullish":
