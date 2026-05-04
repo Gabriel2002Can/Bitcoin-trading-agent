@@ -25,7 +25,7 @@ class Metrics:
             "macd_fast": 12,
             "macd_slow": 26,
             "macd_signal": 9,
-            "k": 2.0,
+            "k": 2.0
         }
 
         # read config values (support multiple potential key names)
