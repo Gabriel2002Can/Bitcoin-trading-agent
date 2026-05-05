@@ -46,7 +46,7 @@ class TradingAgent:
         context = self.build_context()
         opinion = self.model.analyze(context)
 
-        # Bug Fixed It
+        # Bug Fixed
         # normalize opinion: the model may return a ChatCompletionMessage-like
         # object whose `content` is a JSON string. Parse it into a dict.
         try:
@@ -97,13 +97,15 @@ class TradingAgent:
         strategy = str(context.get("strategy", self.configuration.all.get("Strategy", "Long Term"))).strip().lower()
 
         # Strategy selection is authoritative and determines rule set
+
+        # Long Term: prioritize DCA trigger —> buy when price dropped at least the configured percent
         if strategy == "long term" or strategy == "long_term" or strategy == "long-term":
-            # Long Term: prioritize DCA trigger —> buy when price dropped at least the configured percent
             if price_change <= -dca_trigger_pct:
                 suggested_fiat = base_dca
                 dca_triggered = True
+
+        # Swing Trade: follow the model opinion primarily
         elif strategy == "swing trade" or strategy == "swing_trade" or strategy == "swing-trade":
-            # Swing Trade: follow the model opinion primarily
             confidence = float(opinion.get("confidence", 0.0))
             if opinion.get("bias") == "bullish":
                 multiplier = 1.0 + confidence
@@ -112,8 +114,9 @@ class TradingAgent:
             else:
                 multiplier = 1.0
             suggested_fiat = base_dca * multiplier
+
+        # Hybrid or unknown: combine DCA trigger and model
         else:
-            # Hybrid or unknown: combine DCA trigger and model
             if price_change <= -dca_trigger_pct:
                 suggested_fiat = base_dca
                 dca_triggered = True

@@ -20,6 +20,9 @@ class Advisor:
 
         Context:
         {json.dumps(context, indent=2)}
+
+        In the strategy context, there are three strategies: Long Term, focused on DCA and long term alternatives. Swing Trade, focused on
+        oportunistic trade opportunities. And hybrid, a mix of these two.
         """
 
         completion = self.client.chat.completions.create(
