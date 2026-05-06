@@ -27,7 +27,7 @@ class TradingAgent:
         raw_dca = self.configuration.all.get("DCA Trigger", None)
 
         return {
-            "strategy": self.configuration.all.get("strategy", "Long Term"),
+            "strategy": self.configuration.all.get("Strategy", "Long Term"),
             "current_price": self.metrics.entry_price,
             "previous_close": prev_close,
             "price_change_pct": price_change_pct,
@@ -130,7 +130,7 @@ class TradingAgent:
                     multiplier = 1.0
                 suggested_fiat = base_dca * multiplier
 
-        # compute BTC amount
+        # Compute BTC amount
         if context["current_price"] and suggested_fiat > 0:
             suggested_btc = suggested_fiat / context["current_price"]
 
