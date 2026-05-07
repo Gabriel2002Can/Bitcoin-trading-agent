@@ -91,6 +91,8 @@ class TradingAgent:
         suggested_btc = 0.0
         dca_triggered = False
 
+        total_score = 0
+
         # compute price drop pct (negative when price fell)
         price_change = context.get("price_change_pct", 0.0)
 
@@ -106,14 +108,15 @@ class TradingAgent:
 
         # Swing Trade: follow the model opinion primarily
         elif strategy == "swing trade" or strategy == "swing_trade" or strategy == "swing-trade":
-            confidence = float(opinion.get("confidence", 0.0))
-            if opinion.get("bias") == "bullish":
-                multiplier = 1.0 + confidence
-            elif opinion.get("bias") == "bearish":
-                multiplier = max(0.0, 1.0 - confidence)
-            else:
-                multiplier = 1.0
-            suggested_fiat = base_dca * multiplier
+
+            rsi_score = (50 - context.get("rsi",50)) / 50 # Value between = 1 - 0
+
+            macd_score = max( -1, min(1, context.get("macd_histogram", 0) / 100)) # Value between = 1 - 0
+
+            sma_score = max( -1, min(1, context.get("current_price", 0) - context.get("sma", 1) / context.get("sma", 1))) # Value between = 1 - 0
+
+            # sma score should impact less the score that the other metrics
+            total_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 - 0
 
         # Hybrid or unknown: combine DCA trigger and model
         else:
@@ -121,19 +124,19 @@ class TradingAgent:
                 suggested_fiat = base_dca
                 dca_triggered = True
             else:
-                confidence = float(opinion.get("confidence", 0.0))
-                if opinion.get("bias") == "bullish":
-                    multiplier = 1.0 + confidence
-                elif opinion.get("bias") == "bearish":
-                    multiplier = max(0.0, 1.0 - confidence)
-                else:
-                    multiplier = 1.0
-                suggested_fiat = base_dca * multiplier
+                rsi_score = (50 - context.get("rsi",50)) / 50 # Value between = 1 - 0
 
-        # Compute BTC amount
-        if context["current_price"] and suggested_fiat > 0:
-            suggested_btc = suggested_fiat / context["current_price"]
+                macd_score = max( -1, min(1, context.get("macd_histogram", 0) / 100)) # Value between = 1 - 0
 
+                sma_score = max( -1, min(1, context.get("current_price", 0) - context.get("sma", 1) / context.get("sma", 1))) # Value between = 1 - 0
+
+                # sma score should impact less the score that the other metrics
+                total_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 - 0
+
+        numeric_decision = total_score > 0.5
+
+        # TODO: change return dict to englobe new variables
+        
         return {
             "strategy": context["strategy"],
             "opinion": opinion,
