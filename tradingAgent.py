@@ -87,8 +87,6 @@ class TradingAgent:
 
         dca_trigger_pct = _parse_percent(context.get("dca_trigger_raw"))
 
-        suggested_fiat = 0.0
-        suggested_btc = 0.0
         dca_triggered = False
 
         total_score = 0
@@ -103,7 +101,6 @@ class TradingAgent:
         # Long Term: prioritize DCA trigger —> buy when price dropped at least the configured percent
         if strategy == "long term" or strategy == "long_term" or strategy == "long-term":
             if price_change <= -dca_trigger_pct:
-                suggested_fiat = base_dca
                 dca_triggered = True
 
         # Swing Trade: follow the model opinion primarily
@@ -121,7 +118,6 @@ class TradingAgent:
         # Hybrid or unknown: combine DCA trigger and model
         else:
             if price_change <= -dca_trigger_pct:
-                suggested_fiat = base_dca
                 dca_triggered = True
             else:
                 rsi_score = (50 - context.get("rsi",50)) / 50 # Value between = 1 - 0
@@ -133,17 +129,16 @@ class TradingAgent:
                 # sma score should impact less the score that the other metrics
                 total_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 - 0
 
-        numeric_decision = total_score > 0.5
+        # If more than 0.5, trigger buy
+        numeric_decision = total_score > 0.5 # Alter to constant (sensibility)?
 
-        # TODO: change return dict to englobe new variables
-        
         return {
             "strategy": context["strategy"],
             "opinion": opinion,
-            "suggested_fiat": suggested_fiat,
-            "suggested_btc": suggested_btc,
             "dca_triggered": dca_triggered,
             "dca_trigger_pct": dca_trigger_pct,
+            "numeric_decision": numeric_decision,
+            "total_score": total_score,
             "context": context,
         }
 
