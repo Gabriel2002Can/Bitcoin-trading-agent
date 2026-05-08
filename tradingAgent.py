@@ -98,6 +98,8 @@ class TradingAgent:
 
         # Strategy selection is authoritative and determines rule set
 
+        # TODO: change logic to accept sells as well
+
         # Long Term: prioritize DCA trigger —> buy when price dropped at least the configured percent
         if strategy == "long term" or strategy == "long_term" or strategy == "long-term":
             if price_change <= -dca_trigger_pct:
@@ -129,15 +131,11 @@ class TradingAgent:
                 # sma score should impact less the score that the other metrics
                 total_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 - 0
 
-        # If more than 0.5, trigger buy
-        numeric_decision = total_score > 0.5 # Alter to constant (sensibility)?
-
         return {
             "strategy": context["strategy"],
             "opinion": opinion, # Model's opinion
             "dca_triggered": dca_triggered, # If DCA was triggered
             "dca_trigger_pct": dca_trigger_pct, # The drop percentage it drops
-            "numeric_decision": numeric_decision, # If the numeric scores triggered the swing trade
             "total_score": total_score, # The total scored throught all metrics
             "context": context, # Context dict
         }
@@ -148,20 +146,26 @@ class TradingAgent:
 
         model_opinion = decision["opinion"]
 
-        multiplier = 1 if model_opinion["bias"] == "bullish" else 0 if model_opinion["bias"] == "neutral" else - 1
-        model_decision = model_opinion["confidence"] * multiplier
+        multiplier = 1 if model_opinion["bias"] == "bullish" else 0 if model_opinion["bias"] == "neutral" else -1
+        model_score = model_opinion["confidence"] * multiplier
 
         # Get both model suggestion and numeric
-        final_decision = (model_decision * 0.35) + (decision["context"]["numeric_decision"] * 0.65)
+        final_score = (model_score * 0.35) + (decision["context"]["numeric_decision"] * 0.65)
+
+        final_decision = final_score > 0.5 # Alter to constant (sensibility)?
 
         # If stop loss triggered SELL
         if current <= stop_loss:
-            decision["action"] = "hold"
+            decision["action"] = "sell"
             decision["reason"] = "stop_loss_triggered"
-            decision["value"] = 0.0
+            decision["value"] = 0.0 # TODO: needs to sell correct amount based on final_decision
             return decision
 
         # Opportunistic SELL
+        if final_score < -0.5:
+            decision["action"] = "sell"
+            decision["reason"] = "opportunistic_sell"
+            decision["value"] = 0.0 # TODO: same as previous TODO
 
         # If DCA TRIGGERED
         if decision.get("dca_triggered", False):
@@ -171,10 +175,19 @@ class TradingAgent:
             return decision
         
         # Opportunistic BUY
+        if final_score > 0.5:
+            decision["action"] = "buy"
+            decision["reason"] = "opportunistic_buy"
+            decision["value"] = 0.0 # TODO: same as previous TODO
         
         # HOLD if not ideal
         decision["action"] = "hold"
         decision["reason"] = "neutral_market"
+
+        # decision:
+        # "action": X
+        # "reason": Y
+        # "value": Z
         return decision
 
     def tick(self):
