@@ -27,7 +27,7 @@ class TradingAgent:
         raw_dca = self.configuration.all.get("DCA Trigger", None)
 
         return {
-            "strategy": self.configuration.all.get("Strategy", "Long Term"),
+            "strategy": self.configuration.all.get("strategy", "Long Term"),
             "current_price": self.metrics.entry_price,
             "previous_close": prev_close,
             "price_change_pct": price_change_pct,
@@ -37,6 +37,7 @@ class TradingAgent:
             "ema": self.metrics.get_latest_value("EMA"),
             "sma": self.metrics.get_latest_value("SMA"),
             "macd": self.metrics.get_latest_value("MACD"),
+            "dca_amount": self.configuration.all.get("DCA Amount", 500),
             "macd_signal": self.metrics.get_latest_value("MACD_signal"),
             "macd_histogram": self.metrics.get_latest_value("MACD_histogram"),
             "atr": self.metrics.get_latest_value("ATR"),
@@ -68,7 +69,6 @@ class TradingAgent:
                     opinion = parsed
         except Exception:
             pass
-        base_dca = float(self.configuration.all.get("DCA Amount", 500))
 
         # parse DCA trigger into a fraction ('3%' -> 0.03)
         def _parse_percent(val, default_pct=0.03):
@@ -134,33 +134,47 @@ class TradingAgent:
 
         return {
             "strategy": context["strategy"],
-            "opinion": opinion,
-            "dca_triggered": dca_triggered,
-            "dca_trigger_pct": dca_trigger_pct,
-            "numeric_decision": numeric_decision,
-            "total_score": total_score,
-            "context": context,
+            "opinion": opinion, # Model's opinion
+            "dca_triggered": dca_triggered, # If DCA was triggered
+            "dca_trigger_pct": dca_trigger_pct, # The drop percentage it drops
+            "numeric_decision": numeric_decision, # If the numeric scores triggered the swing trade
+            "total_score": total_score, # The total scored throught all metrics
+            "context": context, # Context dict
         }
 
     def execute_strategies(self, decision):
         current = decision["context"]["current_price"]
         stop_loss = decision["context"]["stop_loss"]
 
-        # If DCA triggered, allow buy even if below stop loss (DCA overrides stop-loss hold)
-        if decision.get("dca_triggered", False) and decision.get("suggested_fiat", 0) > 0:
-            decision["action"] = "buy"
-            decision["reason"] = "dca_triggered_overrode_rules"
-            return decision
+        model_opinion = decision["opinion"]
 
-        # otherwise respect stop-loss hold rule
+        multiplier = 1 if model_opinion["bias"] == "bullish" else 0 if model_opinion["bias"] == "neutral" else - 1
+        model_decision = model_opinion["confidence"] * multiplier
+
+        # Get both model suggestion and numeric
+        final_decision = (model_decision * 0.35) + (decision["context"]["numeric_decision"] * 0.65)
+
+        # If stop loss triggered SELL
         if current <= stop_loss:
             decision["action"] = "hold"
             decision["reason"] = "stop_loss_triggered"
-            decision["suggested_fiat"] = 0.0
-            decision["suggested_btc"] = 0.0
-        else:
-            decision["action"] = "buy" if decision.get("suggested_fiat", 0) > 0 else "hold"
-            decision["reason"] = "model_and_rules_agree"
+            decision["value"] = 0.0
+            return decision
+
+        # Opportunistic SELL
+
+        # If DCA TRIGGERED
+        if decision.get("dca_triggered", False):
+            decision["action"] = "buy"
+            decision["reason"] = "dca_triggered"
+            decision["value"] = decision["context"]["dca_amount"]
+            return decision
+        
+        # Opportunistic BUY
+        
+        # HOLD if not ideal
+        decision["action"] = "hold"
+        decision["reason"] = "neutral_market"
         return decision
 
     def tick(self):
