@@ -92,7 +92,7 @@ class TradingAgent:
 
         dca_triggered = False
 
-        total_score = 0
+        metrics_score = 0
 
         # compute price drop pct (negative when price fell)
         price_change = context.get("price_change_pct", 0.0)
@@ -101,6 +101,7 @@ class TradingAgent:
 
         # Strategy selection is authoritative and determines rule set
 
+        # TODO: add a sell function for Long Term
         # Long Term: prioritize DCA trigger —> buy when price dropped at least the configured percent
         if strategy == "long term" or strategy == "long_term" or strategy == "long-term":
             if price_change <= -dca_trigger_pct:
@@ -114,7 +115,7 @@ class TradingAgent:
             sma_score  = max(-1, min(1, (context.get("current_price", 0) - context.get("sma", 1)) / context.get("sma", 1))) # Value between 1 and -1
 
             # sma score should impact less the score that the other metrics
-            total_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 - 0
+            metrics_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 and -1
 
         # Hybrid or unknown: combine DCA trigger and model
         else:
@@ -127,14 +128,14 @@ class TradingAgent:
                 sma_score  = max(-1, min(1, (context.get("current_price", 0) - context.get("sma", 1)) / context.get("sma", 1))) # Value between 1 and -1
 
                 # sma score should impact less the score that the other metrics
-                total_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 - 0
+                metrics_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 and -1
 
         return {
             "strategy": context["strategy"],
             "opinion": opinion, # Model's opinion
             "dca_triggered": dca_triggered, # If DCA was triggered
             "dca_trigger_pct": dca_trigger_pct, # The drop percentage it drops
-            "total_score": total_score, # The total scored throught all metrics
+            "metrics_score": metrics_score, # The total scored throught all metrics
             "context": context, # Context dict
         }
 
@@ -148,17 +149,19 @@ class TradingAgent:
         model_score = model_opinion["confidence"] * multiplier
 
         # Get both model suggestion and numeric
-        final_score = (model_score * 0.35) + (decision["context"]["numeric_decision"] * 0.65)
+        final_score = (model_score * 0.4) + (decision["metrics_score"] * 0.6)
 
         # TODO: Configure sensibility threshold via config sheet
-        buy_trigger = final_score >= 0.5
-        sell_trigger = final_score <= - 0.5
+        buy_trigger = final_score >= 0.4
+        sell_trigger = final_score <= - 0.4
 
         # Base values definied on the config sheet
         sell_base_value = decision["context"]["buy_amount"]
         buy_base_value = _parse_percent(decision["context"]["sell_amount"])
 
         dca_base_value = decision["context"]["dca_amount"]
+
+        decision["scores"] = f'Models score: {model_score} Metrics score: {decision["metrics_score"]}'
 
         # If stop loss triggered SELL
         if current <= stop_loss:
@@ -171,7 +174,7 @@ class TradingAgent:
         if sell_trigger:
             decision["action"] = "sell"
             decision["reason"] = "opportunistic_sell"
-            decision["value"] = sell_base_value * (abs(1 + final_score))
+            decision["value"] = sell_base_value * (abs(1 + final_score)) # IN Percentage
             return decision
 
         # If DCA TRIGGERED
@@ -186,6 +189,7 @@ class TradingAgent:
             decision["action"] = "buy"
             decision["reason"] = "opportunistic_buy"
             decision["value"] = buy_base_value * (1 + final_score)
+            return decision
 
         # HOLD if current context is not ideal
         decision["action"] = "hold"
