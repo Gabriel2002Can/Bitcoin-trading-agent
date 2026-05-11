@@ -1,6 +1,14 @@
 from configuration import Configuration
 from metrics import Metrics
 from advisor import Advisor
+import json
+import datetime
+import os
+
+try:
+    import requests
+except Exception:
+    requests = None
 
 # Helper Function
 # parse DCA trigger into a fraction ('3%' -> 0.03)
@@ -204,5 +212,109 @@ class TradingAgent:
     def tick(self):
         decision = self.evaluate_strategies()
         final_decision = self.execute_strategies(decision)
-        #self.notify(final_decision)
+        # attempt to notify an external endpoint if configured
+        notify_url = os.getenv("FASTAPI_NOTIFY_URL", None)
+        if notify_url:
+            try:
+                self.notify(final_decision, notify_url)
+            except Exception:
+                pass
         return final_decision
+
+    def serialize_decision(self, decision: dict) -> dict:
+        """Return a JSON-safe version of the decision dict.
+
+        - Ensures `opinion` is a plain dict.
+        - Converts pandas/numpy types to native Python types.
+        - Normalizes sell_amount percentages into numeric and flags.
+        - Adds an ISO8601 `timestamp`.
+        """
+        out = {}
+
+        # shallow copy of simple fields
+        for k in ["strategy", "dca_triggered", "dca_trigger_pct", "metrics_score", "scores", "action", "reason", "value"]:
+            if k in decision:
+                try:
+                    out[k] = float(decision[k]) if isinstance(decision[k], (int, float)) and not isinstance(decision[k], bool) and k in ("dca_trigger_pct","metrics_score","value") else decision[k]
+                except Exception:
+                    out[k] = decision[k]
+
+        # opinion normalization
+        opinion = decision.get("opinion", None)
+        if opinion is None:
+            out["opinion"] = {"bias": "neutral", "confidence": 0.5, "risk_adjustment": 0.5, "rationale": "no_opinion"}
+        else:
+            if isinstance(opinion, dict):
+                out["opinion"] = opinion
+            else:
+                # try to extract JSON content
+                parsed = None
+                try:
+                    if hasattr(opinion, "content"):
+                        parsed = json.loads(opinion.content)
+                    elif hasattr(opinion, "message") and hasattr(opinion.message, "content"):
+                        parsed = json.loads(opinion.message.content)
+                    elif isinstance(opinion, str):
+                        parsed = json.loads(opinion)
+                except Exception:
+                    parsed = None
+
+                if parsed and isinstance(parsed, dict):
+                    out["opinion"] = parsed
+                else:
+                    out["opinion"] = {"bias": "neutral", "confidence": 0.5, "risk_adjustment": 0.5, "rationale": str(opinion)}
+
+        # context normalization
+        context = decision.get("context", {}) or {}
+        ctx_out = {}
+        for key, val in context.items():
+            try:
+                if val is None:
+                    ctx_out[key] = None
+                elif isinstance(val, (int, float, str, bool)):
+                    ctx_out[key] = val
+                else:
+                    # try convert pandas/numpy scalar
+                    try:
+                        ctx_out[key] = float(val)
+                    except Exception:
+                        ctx_out[key] = str(val)
+            except Exception:
+                ctx_out[key] = str(val)
+
+        # handle sell_amount normalization
+        sell_amount = ctx_out.get("sell_amount", None)
+        if isinstance(sell_amount, str) and sell_amount.strip().endswith("%"):
+            try:
+                pct = float(sell_amount.strip().rstrip("%")) / 100.0
+                ctx_out["sell_amount"] = pct
+                ctx_out["sell_amount_is_percent"] = True
+            except Exception:
+                ctx_out["sell_amount_is_percent"] = False
+        else:
+            ctx_out["sell_amount_is_percent"] = False
+
+        out["context"] = ctx_out
+
+        # timestamp
+        out["timestamp"] = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+        return out
+
+    def tick_json(self) -> dict:
+        """Call `tick()` and return a JSON-safe dict suitable for APIs or frontends."""
+        dec = self.tick()
+        try:
+            return self.serialize_decision(dec)
+        except Exception:
+            return {"error": "serialization_failed"}
+
+    def notify(self, decision: dict, endpoint: str) -> None:
+        """POST the serialized decision to `endpoint` as JSON. Requires `requests` package."""
+        if requests is None:
+            return
+        payload = self.serialize_decision(decision)
+        try:
+            requests.post(endpoint, json=payload, timeout=2)
+        except Exception:
+            pass
