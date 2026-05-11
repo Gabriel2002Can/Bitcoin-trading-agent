@@ -16,7 +16,7 @@ print("Bitcoin Open : ", BTC['open'])
 print("        Day     : ", BTC['dayLow'], "-", BTC['dayHigh'])
 
 metrics_info.print_metric("StopLoss")
-metrics_info.print_metrics(["RSI", "EMA", "SMA"])
+metrics_info.print_metrics(["RSI", "EMA", "SMA", "MACD", "MACD_histogram"])
 
 print("\n"*5)
 
@@ -26,6 +26,6 @@ print("\n"*5)
 
 print(trading_agent.tick())
 
-print("\n"*5)
+# print("\n"*5)
 
-print(trading_agent.model.analyze(trading_agent.build_context()))
+# print(trading_agent.model.analyze(trading_agent.build_context()))

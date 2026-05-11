@@ -9,7 +9,8 @@ class Configuration:
     """ Stores information about the current configurations settings, gathered from google sheets
     """
 
-    options = ["ATR Period", "EMA Span", "SMA Window", "RSI Period", "MACD Fast", "MACD Slow", "MACD Signal", "Strategy", "Stop Loss Multiplier", "DCA Amount", "DCA Trigger"]
+    # Contains all options presented in the google sheet
+    options = ["ATR Period", "EMA Span", "SMA Window", "RSI Period", "MACD Fast", "MACD Slow", "MACD Signal", "Strategy", "Stop Loss Multiplier", "DCA Amount", "DCA Trigger", "Swing Buy Amount","Swing Sell Amount"]
     
     def __init__(self, config_names: list[str] = options, sheet_name: str = "Settings") -> None:
 
@@ -35,4 +36,4 @@ class Configuration:
 
             self.all[option_key] = option_value
     
-    # Todo: Create a JSON that contains all the configs. It will serve as a fallback option to the google sheet information
+    # TODO: Create a JSON that contains all the configs. It will serve as a fallback option to the google sheet information
