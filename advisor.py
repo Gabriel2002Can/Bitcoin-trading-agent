@@ -1,13 +1,21 @@
 import json
 from groq import Groq
+import os
+from dotenv import load_dotenv
 
 class Advisor:
     """Accepts the Metric Contexts provided via the TradingAgent Class and returns a JSON object with some additional evaluations,
     according to its general prompt, detailed in the "prompt" variable.
     """
     def __init__(self, model_name="llama-3.3-70b-versatile"):
+
+        load_dotenv()
+        GROQ_KEY_PATH = os.getenv("GROQ_KEY_PATH")
+
         self.model_name = model_name
-        self.client = Groq()
+        self.client = Groq(
+            api_key=GROQ_KEY_PATH
+        )
 
     def analyze(self, context):
         prompt = f"""
@@ -20,6 +28,9 @@ class Advisor:
 
         Context:
         {json.dumps(context, indent=2)}
+
+        In the strategy context, there are three strategies: Long Term, focused on DCA and long term alternatives. Swing Trade, focused on
+        oportunistic trade opportunities. And hybrid, a mix of these two.
         """
 
         completion = self.client.chat.completions.create(
