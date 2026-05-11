@@ -156,8 +156,8 @@ class TradingAgent:
         sell_trigger = final_score <= - 0.4
 
         # Base values definied on the config sheet
-        sell_base_value = decision["context"]["buy_amount"]
-        buy_base_value = _parse_percent(decision["context"]["sell_amount"])
+        buy_base_value = float(decision["context"]["buy_amount"])
+        sell_base_value = _parse_percent(decision["context"]["sell_amount"])
 
         dca_base_value = decision["context"]["dca_amount"]
 
@@ -174,7 +174,7 @@ class TradingAgent:
         if sell_trigger:
             decision["action"] = "sell"
             decision["reason"] = "opportunistic_sell"
-            decision["value"] = sell_base_value * (abs(1 + final_score)) # IN Percentage
+            decision["value"] = sell_base_value * (abs(1 + final_score)) # In Percentage
             return decision
 
         # If DCA TRIGGERED
