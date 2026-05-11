@@ -2,6 +2,22 @@ from configuration import Configuration
 from metrics import Metrics
 from advisor import Advisor
 
+# Helper Function
+# parse DCA trigger into a fraction ('3%' -> 0.03)
+def _parse_percent(val, default_pct=0.03):
+    try:
+        if val is None:
+            return default_pct
+        s = str(val).strip()
+        if s.endswith("%"):
+            s = s[:-1]
+        num = float(s)
+        if num > 1:  # treat as percent like 3 -> 3%
+            return num / 100.0
+        return num
+    except Exception:
+        return default_pct
+
 class TradingAgent:
     """Uses metrics and the current configurations to evaluate which strategy should be used and its paramethers.
     """
@@ -41,6 +57,8 @@ class TradingAgent:
             "macd_signal": self.metrics.get_latest_value("MACD_signal"),
             "macd_histogram": self.metrics.get_latest_value("MACD_histogram"),
             "atr": self.metrics.get_latest_value("ATR"),
+            "buy_amount":self.configuration.all.get("buy_amount",250),
+            "sell_amount":self.configuration.all.get("sell_amount","10%"),
         }
 
     def evaluate_strategies(self):
@@ -70,21 +88,6 @@ class TradingAgent:
         except Exception:
             pass
 
-        # parse DCA trigger into a fraction ('3%' -> 0.03)
-        def _parse_percent(val, default_pct=0.03):
-            try:
-                if val is None:
-                    return default_pct
-                s = str(val).strip()
-                if s.endswith("%"):
-                    s = s[:-1]
-                num = float(s)
-                if num > 1:  # treat as percent like 3 -> 3%
-                    return num / 100.0
-                return num
-            except Exception:
-                return default_pct
-
         dca_trigger_pct = _parse_percent(context.get("dca_trigger_raw"))
 
         dca_triggered = False
@@ -98,8 +101,6 @@ class TradingAgent:
 
         # Strategy selection is authoritative and determines rule set
 
-        # TODO: change logic to accept sells as well
-
         # Long Term: prioritize DCA trigger —> buy when price dropped at least the configured percent
         if strategy == "long term" or strategy == "long_term" or strategy == "long-term":
             if price_change <= -dca_trigger_pct:
@@ -108,11 +109,9 @@ class TradingAgent:
         # Swing Trade: follow the model opinion primarily
         elif strategy == "swing trade" or strategy == "swing_trade" or strategy == "swing-trade":
 
-            rsi_score = (50 - context.get("rsi",50)) / 50 # Value between = 1 - 0
-
-            macd_score = max( -1, min(1, context.get("macd_histogram", 0) / 100)) # Value between = 1 - 0
-
-            sma_score = max( -1, min(1, context.get("current_price", 0) - context.get("sma", 1) / context.get("sma", 1))) # Value between = 1 - 0
+            rsi_score  = (50 - context.get("rsi", 50)) / 50.0   # Value between 1 and -1
+            macd_score = max(-1, min(1, context.get("macd_histogram", 0) / 50.0))   # Value between 1 and -1
+            sma_score  = max(-1, min(1, (context.get("current_price", 0) - context.get("sma", 1)) / context.get("sma", 1))) # Value between 1 and -1
 
             # sma score should impact less the score that the other metrics
             total_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 - 0
@@ -122,11 +121,10 @@ class TradingAgent:
             if price_change <= -dca_trigger_pct:
                 dca_triggered = True
             else:
-                rsi_score = (50 - context.get("rsi",50)) / 50 # Value between = 1 - 0
-
-                macd_score = max( -1, min(1, context.get("macd_histogram", 0) / 100)) # Value between = 1 - 0
-
-                sma_score = max( -1, min(1, context.get("current_price", 0) - context.get("sma", 1) / context.get("sma", 1))) # Value between = 1 - 0
+                
+                rsi_score  = (50 - context.get("rsi", 50)) / 50.0   # Value between 1 and -1
+                macd_score = max(-1, min(1, context.get("macd_histogram", 0) / 50.0))   # Value between 1 and -1
+                sma_score  = max(-1, min(1, (context.get("current_price", 0) - context.get("sma", 1)) / context.get("sma", 1))) # Value between 1 and -1
 
                 # sma score should impact less the score that the other metrics
                 total_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 - 0
@@ -144,51 +142,60 @@ class TradingAgent:
         current = decision["context"]["current_price"]
         stop_loss = decision["context"]["stop_loss"]
 
+        # Getting and normalizing model's opinion
         model_opinion = decision["opinion"]
-
         multiplier = 1 if model_opinion["bias"] == "bullish" else 0 if model_opinion["bias"] == "neutral" else -1
         model_score = model_opinion["confidence"] * multiplier
 
         # Get both model suggestion and numeric
         final_score = (model_score * 0.35) + (decision["context"]["numeric_decision"] * 0.65)
 
-        final_decision = final_score > 0.5 # Alter to constant (sensibility)?
+        # TODO: Configure sensibility threshold via config sheet
+        buy_trigger = final_score >= 0.5
+        sell_trigger = final_score <= - 0.5
+
+        # Base values definied on the config sheet
+        sell_base_value = decision["context"]["buy_amount"]
+        buy_base_value = _parse_percent(decision["context"]["sell_amount"])
+
+        dca_base_value = decision["context"]["dca_amount"]
 
         # If stop loss triggered SELL
         if current <= stop_loss:
             decision["action"] = "sell"
             decision["reason"] = "stop_loss_triggered"
-            decision["value"] = 0.0 # TODO: needs to sell correct amount based on final_decision
+            decision["value"] = sell_base_value 
             return decision
 
         # Opportunistic SELL
-        if final_score < -0.5:
+        if sell_trigger:
             decision["action"] = "sell"
             decision["reason"] = "opportunistic_sell"
-            decision["value"] = 0.0 # TODO: same as previous TODO
+            decision["value"] = sell_base_value * (abs(1 + final_score))
+            return decision
 
         # If DCA TRIGGERED
         if decision.get("dca_triggered", False):
             decision["action"] = "buy"
             decision["reason"] = "dca_triggered"
-            decision["value"] = decision["context"]["dca_amount"]
+            decision["value"] = dca_base_value
             return decision
         
         # Opportunistic BUY
-        if final_score > 0.5:
+        if buy_trigger:
             decision["action"] = "buy"
             decision["reason"] = "opportunistic_buy"
-            decision["value"] = 0.0 # TODO: same as previous TODO
-        
-        # HOLD if not ideal
-        decision["action"] = "hold"
-        decision["reason"] = "neutral_market"
+            decision["value"] = buy_base_value * (1 + final_score)
 
+        # HOLD if current context is not ideal
+        decision["action"] = "hold"
+        decision["value"] = 0.0
+        decision["reason"] = "neutral_market"
+        return decision
         # decision:
         # "action": X
         # "reason": Y
         # "value": Z
-        return decision
 
     def tick(self):
         decision = self.evaluate_strategies()
