@@ -1,8 +1,8 @@
-from metrics import Metrics
-from data import get_data
-from configuration import Configuration
-from advisor import Advisor
-from tradingAgent import TradingAgent
+from app.core.metrics import Metrics
+from app.data.finance_data import get_data
+from app.data.configuration import Configuration
+from app.core.advisor import Advisor
+from app.core.tradingAgent import TradingAgent
 
 BTC = get_data()
 

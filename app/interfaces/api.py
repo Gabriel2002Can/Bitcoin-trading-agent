@@ -2,11 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from data import get_data
-from configuration import Configuration
-from metrics import Metrics
-from advisor import Advisor
-from tradingAgent import TradingAgent
+from app.data.finance_data import get_data
+from app.data.configuration import Configuration
+from app.core.metrics import Metrics
+from app.core.advisor import Advisor
+from app.core.tradingAgent import TradingAgent
 import os
 
 app = FastAPI()

@@ -1,6 +1,6 @@
-from configuration import Configuration
-from metrics import Metrics
-from advisor import Advisor
+from app.data.configuration import Configuration
+from app.core.metrics import Metrics
+from app.core.advisor import Advisor
 import json
 import datetime
 import os
@@ -227,11 +227,10 @@ class TradingAgent:
         - Ensures `opinion` is a plain dict.
         - Converts pandas/numpy types to native Python types.
         - Normalizes sell_amount percentages into numeric and flags.
-        - Adds an ISO8601 `timestamp`.
         """
         out = {}
 
-        # shallow copy of simple fields
+        # Copy of simple fields
         for k in ["strategy", "dca_triggered", "dca_trigger_pct", "metrics_score", "scores", "action", "reason", "value"]:
             if k in decision:
                 try:
