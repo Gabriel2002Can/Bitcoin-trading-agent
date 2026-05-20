@@ -48,13 +48,14 @@ class TradingAgent:
             price_change_pct = 0.0
 
         # parse DCA trigger from config (keeps as raw for model visibility too)
-        raw_dca = self.configuration.all.get("DCA Trigger", None)
+        raw_dca = self.configuration.all.get("dca_trigger", None)
 
         return {
             "strategy": self.configuration.all.get("strategy", "Long Term"),
             "current_price": self.metrics.entry_price,
             "previous_close": prev_close,
             "price_change_pct": price_change_pct,
+            "dca_cooldown": self.configuration.all.get("")
             "dca_trigger_raw": raw_dca,
             "stop_loss": self.metrics.get_latest_value("StopLoss"),
             "rsi": self.metrics.get_latest_value("RSI"),
