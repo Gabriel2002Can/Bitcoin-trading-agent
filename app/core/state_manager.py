@@ -7,7 +7,7 @@ class StateManager:
         self.dca_cooldown = self.load_dca_cooldown(config)
         self.last_dca = self.load_last_dca_trade()
 
-    def load_last_dca_trade(self, file_name="dca_info.json"):
+    def _load_last_dca_trade(self, file_name="dca_info.json"):
 
         path = f"app/data/{file_name}"
 
@@ -32,10 +32,13 @@ class StateManager:
 
             return datetime.fromisoformat(last_trade)
     
-    def load_dca_cooldown(self, config):
+    def _load_dca_cooldown(self, config):
         return timedelta(days=int(config.all["DCA Time"]))
     
-    def check_cooldown(self):
+    def _load_tick_interval(self, config):
+        return 
+    
+    def _check_cooldown(self):
          
         if self.last_dca is None:
             return True

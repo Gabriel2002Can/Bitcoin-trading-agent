@@ -4,6 +4,7 @@ from app.core.advisor import Advisor
 import json
 import datetime
 import os
+from app.core.state_manager import StateManager
 
 try:
     import requests
@@ -35,10 +36,11 @@ class TradingAgent:
         self.metrics = metrics
         self.model = model
 
-    def build_context(self):
+    def _build_context(self):
         # compute previous close and percent change where possible
         prev_close = None
         price_change_pct = 0.0
+
         try:
             if self.metrics.data is not None and "Close" in self.metrics.data.columns and len(self.metrics.data["Close"]) >= 2:
                 prev_close = float(self.metrics.data["Close"].iloc[-2])
@@ -55,7 +57,6 @@ class TradingAgent:
             "current_price": self.metrics.entry_price,
             "previous_close": prev_close,
             "price_change_pct": price_change_pct,
-            "dca_cooldown": self.configuration.all.get("")
             "dca_trigger_raw": raw_dca,
             "stop_loss": self.metrics.get_latest_value("StopLoss"),
             "rsi": self.metrics.get_latest_value("RSI"),
@@ -70,7 +71,7 @@ class TradingAgent:
             "sell_amount":self.configuration.all.get("sell_amount","10%"),
         }
 
-    def evaluate_strategies(self):
+    def _evaluate_strategies(self):
         context = self.build_context()
         opinion = self.model.analyze(context)
 
@@ -148,7 +149,7 @@ class TradingAgent:
             "context": context, # Context dict
         }
 
-    def execute_strategies(self, decision):
+    def _execute_strategies(self, decision):
         current = decision["context"]["current_price"]
         stop_loss = decision["context"]["stop_loss"]
 
@@ -222,7 +223,7 @@ class TradingAgent:
                 pass
         return final_decision
 
-    def serialize_decision(self, decision: dict) -> dict:
+    def _serialize_decision(self, decision: dict) -> dict:
         """Return a JSON-safe version of the decision dict.
 
         - Ensures `opinion` is a plain dict.

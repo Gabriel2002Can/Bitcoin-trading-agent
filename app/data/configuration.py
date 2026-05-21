@@ -9,8 +9,10 @@ class Configuration:
     """ Stores information about the current configurations settings, gathered from google sheets
     """
 
+    portfolio_options = ["Portfolio Value $", "Portfolio Value BTC"]
+
     # Contains all options presented in the google sheet
-    options = ["ATR Period", "EMA Span", "SMA Window", "RSI Period", "MACD Fast", "MACD Slow", "MACD Signal", "Strategy", "Stop Loss Multiplier", "DCA Time", "DCA Amount", "DCA Trigger", "Swing Buy Amount","Swing Sell Amount"]
+    options = ["Tick Interval" , "ATR Period", "EMA Span", "SMA Window", "RSI Period", "MACD Fast", "MACD Slow", "MACD Signal", "Strategy", "Stop Loss Multiplier", "DCA Time", "DCA Amount", "DCA Trigger", "Swing Buy Amount","Swing Sell Amount"]
     
     def __init__(self, config_names: list[str] = options, sheet_name: str = "Settings") -> None:
 
@@ -21,6 +23,9 @@ class Configuration:
         self.config_names = config_names
         self.sheet_name = sheet_name
         self.sheet = gc.open(self.sheet_name).sheet1 # Sheet object
+
+        self.portfolio = {}
+        self._populate_portfolio()
 
         self.all = dict()
         self._get_all_config()
@@ -36,4 +41,11 @@ class Configuration:
 
             self.all[option_key] = option_value
     
+    def _populate_portfolio(self, options: list[str]) -> None:
+
+        for option in options:
+            option_key, option_value = self._get_config(option)
+
+            self.portfolio[option_key] = option_value
+
     # TODO: Create a JSON that contains all the configs. It will serve as a fallback option to the google sheet information
