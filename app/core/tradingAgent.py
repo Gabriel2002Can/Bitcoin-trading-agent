@@ -4,7 +4,7 @@ from app.core.advisor import Advisor
 import json
 import datetime
 import os
-from app.core.state_manager import StateManager
+from app.core.time_manager import TimeManager
 
 try:
     import requests
@@ -35,6 +35,8 @@ class TradingAgent:
         self.configuration = configuration
         self.metrics = metrics
         self.model = model
+
+        self.time_manager = TimeManager(self.configuration)
 
     def _build_context(self):
         # compute previous close and percent change where possible
@@ -302,7 +304,7 @@ class TradingAgent:
 
         return out
 
-    def tick_json(self) -> dict:
+    def _tick_json(self) -> dict:
         """Call `tick()` and return a JSON-safe dict suitable for APIs or frontends."""
         dec = self.tick()
         try:
@@ -310,7 +312,7 @@ class TradingAgent:
         except Exception:
             return {"error": "serialization_failed"}
 
-    def notify(self, decision: dict, endpoint: str) -> None:
+    def _notify(self, decision: dict, endpoint: str) -> None:
         """POST the serialized decision to `endpoint` as JSON. Requires `requests` package."""
         if requests is None:
             return

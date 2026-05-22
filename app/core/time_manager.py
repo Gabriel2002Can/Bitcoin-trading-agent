@@ -2,7 +2,7 @@ import json
 import os
 from datetime import datetime, timedelta, timezone
 
-class StateManager:
+class TimeManager:
     def __init__(self, config):
         self.dca_cooldown = self.load_dca_cooldown(config)
         self.last_dca = self.load_last_dca_trade()
@@ -35,12 +35,26 @@ class StateManager:
     def _load_dca_cooldown(self, config):
         return timedelta(days=int(config.all["DCA Time"]))
     
-    def _load_tick_interval(self, config):
-        return 
+    # TODO: Check how to implement this part
+    # def _load_tick_interval(self, config):
+    #     return timedelta(minutes=int(config.all["Tick Interval"]))
     
-    def _check_cooldown(self):
-         
+    def check_cooldown(self):
+          
         if self.last_dca is None:
             return True
 
         return datetime.now(timezone.utc) - self.last_dca >= self.dca_cooldown
+    
+    def update_last_dca_trade(self, file_name="dca_info.json"):
+
+        path = f"app/data/{file_name}"
+
+        config_data = {
+                "last_dca_trade": datetime.now(timezone.utc).isoformat()
+            }
+
+        with open(path, "w") as file:
+            json.dump(config_data, file, indent=4)
+
+        return None
