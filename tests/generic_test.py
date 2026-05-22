@@ -27,9 +27,11 @@ print(config.all)
 
 print("\n"*5)
 
-print(trading_agent.tick())
+# print(trading_agent.tick())
 
 time_manager.update_last_dca_trade()
+
+print(time_manager.check_cooldown())
 
 # print("\n"*5)
 

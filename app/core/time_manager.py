@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, timezone
 
 class TimeManager:
     def __init__(self, config):
-        self.dca_cooldown = self.load_dca_cooldown(config)
-        self.last_dca = self.load_last_dca_trade()
+        self.dca_cooldown = self._load_dca_cooldown(config)
+        self.last_dca = self._load_last_dca_trade()
 
     def _load_last_dca_trade(self, file_name="dca_info.json"):
 
@@ -33,7 +33,7 @@ class TimeManager:
             return datetime.fromisoformat(last_trade)
     
     def _load_dca_cooldown(self, config):
-        return timedelta(days=int(config.all["DCA Time"]))
+        return timedelta(days=int(config.all["dca_time"]))
     
     # TODO: Check how to implement this part
     # def _load_tick_interval(self, config):

@@ -41,7 +41,7 @@ class Configuration:
 
             self.all[option_key] = option_value
     
-    def _populate_portfolio(self, options: list[str]) -> None:
+    def _populate_portfolio(self, options: list[str] = portfolio_options) -> None:
 
         for option in options:
             option_key, option_value = self._get_config(option)
