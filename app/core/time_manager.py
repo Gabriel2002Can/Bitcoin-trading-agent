@@ -7,7 +7,7 @@ class TimeManager:
         self.dca_cooldown = self._load_dca_cooldown(config)
         self.last_dca = self._load_last_dca_trade()
 
-    def _load_last_dca_trade(self, file_name="dca_info.json"):
+    def _load_last_dca_trade(self, file_name="time_info.json"):
 
         path = f"app/data/{file_name}"
 
@@ -46,7 +46,7 @@ class TimeManager:
 
         return datetime.now(timezone.utc) - self.last_dca >= self.dca_cooldown
     
-    def update_last_dca_trade(self, file_name="dca_info.json"):
+    def update_last_dca_trade(self, file_name="time_info.json"):
 
         path = f"app/data/{file_name}"
 

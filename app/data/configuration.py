@@ -48,4 +48,21 @@ class Configuration:
 
             self.portfolio[option_key] = option_value
 
+    # Value change in dollars, like 100 or - 250; Value in BTC, total value, like 0.41 or -0.1 bitcoin
+    def change_portfolio(self, diff_dollar = None, diff_btc = None) -> None:
+        
+        if diff_dollar:
+            cell_obj_dollar = self.sheet.find("Portfolio Value $")
+            value = float(self.portfolio["portfolio_value"]) + float(diff_dollar)
+
+            self.sheet.update_cell(cell_obj_dollar.row, cell_obj_dollar.col + 2, value)
+        
+        if diff_btc:
+            cell_obj_btc = self.sheet.find("Portfolio Value BTC")
+            value = float(self.portfolio["portfolio_btc"]) + float(diff_btc)
+
+            self.sheet.update_cell(cell_obj_btc.row, cell_obj_btc.col + 2, value)
+        
+        self._populate_portfolio()
+
     # TODO: Create a JSON that contains all the configs. It will serve as a fallback option to the google sheet information

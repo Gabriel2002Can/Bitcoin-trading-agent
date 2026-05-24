@@ -27,6 +27,12 @@ def _parse_percent(val, default_pct=0.03):
     except Exception:
         return default_pct
 
+def _dollar_to_btc(dollar: float, btc_quotation: float) -> float:
+    return dollar/btc_quotation
+
+def _btc_to_dollar(btc_amount: float, btc_quotation: float) -> float:
+    return btc_amount*btc_quotation
+
 class TradingAgent:
     """Uses metrics and the current configurations to evaluate which strategy should be used and its paramethers.
     """
@@ -74,7 +80,7 @@ class TradingAgent:
         }
 
     def _evaluate_strategies(self):
-        context = self.build_context()
+        context = self._build_context()
         opinion = self.model.analyze(context)
 
         # Bug Fixed
@@ -113,11 +119,11 @@ class TradingAgent:
 
         # Strategy selection is authoritative and determines rule set
 
-        # TODO: add a sell function for Long Term
         # Long Term: prioritize DCA trigger —> buy when price dropped at least the configured percent
         if strategy == "long term" or strategy == "long_term" or strategy == "long-term":
-            if price_change <= -dca_trigger_pct:
+            if price_change <= -dca_trigger_pct and self.time_manager.check_cooldown():
                 dca_triggered = True
+                self.time_manager.update_last_dca_trade()
 
         # Swing Trade: follow the model opinion primarily
         elif strategy == "swing trade" or strategy == "swing_trade" or strategy == "swing-trade":
@@ -131,8 +137,9 @@ class TradingAgent:
 
         # Hybrid or unknown: combine DCA trigger and model
         else:
-            if price_change <= -dca_trigger_pct:
+            if price_change <= -dca_trigger_pct and self.time_manager.check_cooldown():
                 dca_triggered = True
+                self.time_manager.update_last_dca_trade()
             else:
                 
                 rsi_score  = (50 - context.get("rsi", 50)) / 50.0   # Value between 1 and -1
@@ -213,16 +220,34 @@ class TradingAgent:
         # "reason": Y
         # "value": Z
 
+    def _execute_trade(self, decision) -> None:
+
+        action = decision.get("action", "hold")
+        value = float(decision.get("value", 0))
+        quotation = float(decision["context"].get("current_price", 0))
+
+        if action == "buy":
+
+            diff_dollar = -value
+            diff_btc = _dollar_to_btc(value, quotation)
+
+            self.configuration.change_portfolio(diff_dollar, diff_btc)
+        
+        elif action == "sell":
+            
+            value = value * float(self.configuration.portfolio["portfolio_btc"])
+
+            diff_btc = -value
+            diff_dollar = _btc_to_dollar(value, quotation)
+
+            self.configuration.change_portfolio(diff_dollar, diff_btc)
+
     def tick(self):
-        decision = self.evaluate_strategies()
-        final_decision = self.execute_strategies(decision)
-        # attempt to notify an external endpoint if configured
-        notify_url = os.getenv("FASTAPI_NOTIFY_URL", None)
-        if notify_url:
-            try:
-                self.notify(final_decision, notify_url)
-            except Exception:
-                pass
+        decision = self._evaluate_strategies()
+        final_decision = self._execute_strategies(decision)
+
+        self._execute_trade(final_decision)
+
         return final_decision
 
     def _serialize_decision(self, decision: dict) -> dict:
@@ -311,13 +336,3 @@ class TradingAgent:
             return self.serialize_decision(dec)
         except Exception:
             return {"error": "serialization_failed"}
-
-    def _notify(self, decision: dict, endpoint: str) -> None:
-        """POST the serialized decision to `endpoint` as JSON. Requires `requests` package."""
-        if requests is None:
-            return
-        payload = self.serialize_decision(decision)
-        try:
-            requests.post(endpoint, json=payload, timeout=2)
-        except Exception:
-            pass

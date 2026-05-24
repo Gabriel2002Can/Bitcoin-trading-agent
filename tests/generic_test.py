@@ -27,12 +27,10 @@ print(config.all)
 
 print("\n"*5)
 
-# print(trading_agent.tick())
+print(f'Dollars: ${config.portfolio["portfolio_value"]} --- BTC: {config.portfolio["portfolio_btc"]}')
 
-time_manager.update_last_dca_trade()
+print(trading_agent.tick())
 
-print(time_manager.check_cooldown())
+print("\n"*5)
 
-# print("\n"*5)
-
-# print(trading_agent.model.analyze(trading_agent.build_context()))
+print(f'Dollars: ${config.portfolio["portfolio_value"]} --- BTC: {config.portfolio["portfolio_btc"]}')
