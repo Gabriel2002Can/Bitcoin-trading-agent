@@ -81,8 +81,24 @@ class TradingAgent:
         }
 
     def _check_balance(self, dollar_value = None, btc_value = None) -> bool:
-        dollar_portfolio = float(self.configuration.portfolio.get("portfolio_value", 0).replace(",", "."))
-        btc_portfolio = float(self.configuration.portfolio.get("portfolio_btc", 0).replace(",", "."))
+        # If portfolio data is unavailable (fallback/offline mode), skip hard balance checks.
+        if not hasattr(self.configuration, "portfolio") or not isinstance(self.configuration.portfolio, dict):
+            return True
+
+        portfolio = self.configuration.portfolio
+
+        def _to_float(value, default=0.0):
+            try:
+                return float(str(value).replace(",", "."))
+            except Exception:
+                return default
+
+        dollar_portfolio = _to_float(
+            portfolio.get("portfolio_value", portfolio.get("Portfolio Value $", 0))
+        )
+        btc_portfolio = _to_float(
+            portfolio.get("portfolio_btc", portfolio.get("Portfolio Value BTC", 0))
+        )
 
         if dollar_value and dollar_value > dollar_portfolio:
             return False
@@ -260,6 +276,9 @@ class TradingAgent:
 
     def _execute_trade(self, decision) -> None:
 
+        if not hasattr(self.configuration, "change_portfolio"):
+            return
+
         action = decision.get("action", "hold")
         value = float(decision.get("value", 0))
         quotation = float(decision["context"].get("current_price", 0))
@@ -359,13 +378,26 @@ class TradingAgent:
 
         return out
 
-    def _tick_json(self) -> dict:
-        """Call `tick()` and return a JSON-safe dict suitable for APIs or frontends."""
-        dec = self.tick()
+    def tick_json(self, simulate: bool = True) -> dict:
+        """Return a JSON-safe decision payload for APIs/frontends.
+
+        simulate=True avoids side effects (portfolio updates, notifications, persistence),
+        which is the expected behavior for dashboard polling endpoints.
+        """
         try:
+            if simulate:
+                decision = self._evaluate_strategies()
+                final_decision = self._execute_strategies(decision)
+                return self._serialize_decision(final_decision)
+
+            dec = self.tick()
             return self._serialize_decision(dec)
-        except Exception:
-            return {"error": "serialization_failed"}
+        except Exception as e:
+            return {"error": "tick_json_failed", "detail": str(e)}
+
+    def _tick_json(self) -> dict:
+        """Backward-compatible alias for older callers."""
+        return self.tick_json(simulate=True)
         
     async def _notify(self, decision) -> None:
 

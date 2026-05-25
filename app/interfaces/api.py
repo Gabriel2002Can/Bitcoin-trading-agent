@@ -28,6 +28,24 @@ class SimpleConfig:
             "sell_amount": "10%",
             "strategy": "Hybrid",
         }
+        self.portfolio = {
+            "portfolio_value": "10000",
+            "portfolio_btc": "0",
+        }
+
+    def change_portfolio(self, diff_dollar=None, diff_btc=None):
+        # Local no-op-ish portfolio update to keep TradingAgent contract intact.
+        try:
+            current_dollar = float(str(self.portfolio.get("portfolio_value", "0")).replace(",", "."))
+            current_btc = float(str(self.portfolio.get("portfolio_btc", "0")).replace(",", "."))
+            if diff_dollar is not None:
+                current_dollar += float(diff_dollar)
+            if diff_btc is not None:
+                current_btc += float(diff_btc)
+            self.portfolio["portfolio_value"] = str(current_dollar)
+            self.portfolio["portfolio_btc"] = str(current_btc)
+        except Exception:
+            pass
 
 def build_agent():
     # get fresh market data
@@ -67,7 +85,7 @@ def get_tick():
     if agent is None:
         return JSONResponse({"error": "failed_to_get_data"}, status_code=500)
     try:
-        payload = agent.tick_json()
+        payload = agent.tick_json(simulate=True)
         # include a few basic market fields
         if BTC:
             payload.setdefault("market", {})
