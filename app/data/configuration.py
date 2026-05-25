@@ -53,13 +53,13 @@ class Configuration:
         
         if diff_dollar:
             cell_obj_dollar = self.sheet.find("Portfolio Value $")
-            value = float(self.portfolio["portfolio_value"]) + float(diff_dollar)
+            value = float(self.portfolio["portfolio_value"]).replace(",", ".") + float(diff_dollar).replace(",", ".")
 
             self.sheet.update_cell(cell_obj_dollar.row, cell_obj_dollar.col + 2, value)
         
         if diff_btc:
             cell_obj_btc = self.sheet.find("Portfolio Value BTC")
-            value = float(self.portfolio["portfolio_btc"]) + float(diff_btc)
+            value = float(self.portfolio["portfolio_btc"]).replace(",", ".") + float(diff_btc).replace(",", ".")
 
             self.sheet.update_cell(cell_obj_btc.row, cell_obj_btc.col + 2, value)
         

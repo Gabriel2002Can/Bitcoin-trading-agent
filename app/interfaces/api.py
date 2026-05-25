@@ -6,7 +6,7 @@ from app.data.finance_data import get_data
 from app.data.configuration import Configuration
 from app.core.metrics import Metrics
 from app.core.advisor import Advisor
-from app.core.tradingAgent import TradingAgent
+from app.core.trading_agent import TradingAgent
 import os
 
 app = FastAPI()
@@ -62,7 +62,6 @@ def build_agent():
 
     agent = TradingAgent(config, metrics, advisor)
     return agent, BTC
-
 
 @app.get("/tick")
 def get_tick():

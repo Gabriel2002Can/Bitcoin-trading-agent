@@ -1,6 +1,6 @@
 """Core trading logic module."""
 from .advisor import Advisor
 from .metrics import Metrics
-from .tradingAgent import TradingAgent
+from .trading_agent import TradingAgent
 
 __all__ = ["Advisor", "Metrics", "TradingAgent"]

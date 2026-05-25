@@ -1,10 +1,12 @@
 from app.data.configuration import Configuration
 from app.core.metrics import Metrics
 from app.core.advisor import Advisor
+from app.core.time_manager import TimeManager
+from app.core.notifier_bot import NotifierBot
+from app.core.helper_functions import *
 import json
 import datetime
-import os
-from app.core.time_manager import TimeManager
+import asyncio
 
 try:
     import requests
@@ -41,6 +43,8 @@ class TradingAgent:
         self.configuration = configuration
         self.metrics = metrics
         self.model = model
+
+        self.notifier = NotifierBot()
 
         self.time_manager = TimeManager(self.configuration)
 
@@ -235,20 +239,12 @@ class TradingAgent:
         
         elif action == "sell":
             
-            value = value * float(self.configuration.portfolio["portfolio_btc"])
+            value = value * float(self.configuration.portfolio["portfolio_btc"].replace(",", "."))
 
             diff_btc = -value
             diff_dollar = _btc_to_dollar(value, quotation)
 
             self.configuration.change_portfolio(diff_dollar, diff_btc)
-
-    def tick(self):
-        decision = self._evaluate_strategies()
-        final_decision = self._execute_strategies(decision)
-
-        self._execute_trade(final_decision)
-
-        return final_decision
 
     def _serialize_decision(self, decision: dict) -> dict:
         """Return a JSON-safe version of the decision dict.
@@ -333,6 +329,22 @@ class TradingAgent:
         """Call `tick()` and return a JSON-safe dict suitable for APIs or frontends."""
         dec = self.tick()
         try:
-            return self.serialize_decision(dec)
+            return self._serialize_decision(dec)
         except Exception:
             return {"error": "serialization_failed"}
+        
+    async def _notify(self, decision) -> None:
+
+        message = build_trade_message(decision, self.configuration.portfolio)
+
+        await self.notifier.send_telegram_message(message)
+
+    def tick(self):
+        decision = self._evaluate_strategies()
+        final_decision = self._execute_strategies(decision)
+
+        self._execute_trade(final_decision)
+
+        asyncio.run(self._notify(final_decision))
+
+        return final_decision
