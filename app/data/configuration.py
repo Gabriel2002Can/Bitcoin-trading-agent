@@ -53,7 +53,7 @@ class Configuration:
         
         if diff_dollar:
             cell_obj_dollar = self.sheet.find("Portfolio Value $")
-            value = float(self.portfolio["portfolio_value"]).replace(",", ".") + float(diff_dollar).replace(",", ".")
+            value = float(self.portfolio["portfolio_value"].replace(",", ".")) + float(diff_dollar.replace(",", "."))
 
             self.sheet.update_cell(cell_obj_dollar.row, cell_obj_dollar.col + 2, value)
         

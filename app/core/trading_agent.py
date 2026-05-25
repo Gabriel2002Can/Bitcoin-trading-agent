@@ -34,7 +34,7 @@ def _dollar_to_btc(dollar: float, btc_quotation: float) -> float:
 
 def _btc_to_dollar(btc_amount: float, btc_quotation: float) -> float:
     return btc_amount*btc_quotation
-
+    
 class TradingAgent:
     """Uses metrics and the current configurations to evaluate which strategy should be used and its paramethers.
     """
@@ -82,6 +82,17 @@ class TradingAgent:
             "buy_amount":self.configuration.all.get("buy_amount",250),
             "sell_amount":self.configuration.all.get("sell_amount","10%"),
         }
+
+    def _check_balance(self, dollar_value = None, btc_value = None) -> bool:
+        dollar_portfolio = float(self.configuration.portfolio.get("portfolio_value", 0).replace(",", "."))
+        btc_portfolio = float(self.configuration.portfolio.get("portfolio_btc", 0).replace(",", "."))
+
+        if dollar_value and dollar_value > dollar_portfolio:
+            return False
+        elif btc_value and btc_portfolio <= 0:
+            return False
+
+        return True
 
     def _evaluate_strategies(self):
         context = self._build_context()
@@ -175,8 +186,8 @@ class TradingAgent:
         final_score = (model_score * 0.4) + (decision["metrics_score"] * 0.6)
 
         # TODO: Configure sensibility threshold via config sheet
-        buy_trigger = final_score >= 0.4
-        sell_trigger = final_score <= - 0.4
+        buy_trigger = final_score >= 0.3
+        sell_trigger = final_score <= - 0.3
 
         # Base values definied on the config sheet
         buy_base_value = float(decision["context"]["buy_amount"])
@@ -184,10 +195,17 @@ class TradingAgent:
 
         dca_base_value = decision["context"]["dca_amount"]
 
-        decision["scores"] = f'Models score: {model_score} Metrics score: {decision["metrics_score"]}'
+        decision["scores"] = f'Models score: {model_score:.3f} Metrics score: {decision["metrics_score"]:.3f} -> Final score: {final_score:.3f}'
 
         # If stop loss triggered SELL
         if current <= stop_loss:
+
+            if not self._check_balance(btc_value=sell_base_value):
+                decision["action"] = "hold"
+                decision["value"] = 0.0
+                decision["reason"] = "no_bitcoins_in_portfolio"
+                return decision
+            
             decision["action"] = "sell"
             decision["reason"] = "stop_loss_triggered"
             decision["value"] = sell_base_value 
@@ -195,13 +213,29 @@ class TradingAgent:
 
         # Opportunistic SELL
         if sell_trigger:
+
+            value = sell_base_value * (abs(1 + final_score)) 
+
+            if not self._check_balance(btc_value=value):
+                decision["action"] = "hold"
+                decision["value"] = 0.0
+                decision["reason"] = "no_bitcoins_in_portfolio"
+                return decision
+
             decision["action"] = "sell"
             decision["reason"] = "opportunistic_sell"
-            decision["value"] = sell_base_value * (abs(1 + final_score)) # In Percentage
+            decision["value"] = value # In Percentage
             return decision
 
         # If DCA TRIGGERED
         if decision.get("dca_triggered", False):
+
+            if not self._check_balance(dollar_value=dca_base_value):
+                decision["action"] = "hold"
+                decision["value"] = 0.0
+                decision["reason"] = "not_enough_balance"
+                return decision
+
             decision["action"] = "buy"
             decision["reason"] = "dca_triggered"
             decision["value"] = dca_base_value
@@ -209,9 +243,18 @@ class TradingAgent:
         
         # Opportunistic BUY
         if buy_trigger:
+
+            value = buy_base_value * (1 + final_score)
+
+            if not self._check_balance(dollar_value=value):
+                decision["action"] = "hold"
+                decision["value"] = 0.0
+                decision["reason"] = "not_enough_balance"
+                return decision
+            
             decision["action"] = "buy"
             decision["reason"] = "opportunistic_buy"
-            decision["value"] = buy_base_value * (1 + final_score)
+            decision["value"] = value
             return decision
 
         # HOLD if current context is not ideal
@@ -338,8 +381,9 @@ class TradingAgent:
         message = build_trade_message(decision, self.configuration.portfolio)
 
         await self.notifier.send_telegram_message(message)
+        await self.notifier.send_gmail_email(message)
 
-    def tick(self):
+    def tick(self) -> dict:
         decision = self._evaluate_strategies()
         final_decision = self._execute_strategies(decision)
 

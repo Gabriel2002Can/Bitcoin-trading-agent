@@ -24,12 +24,12 @@ def _format_money(value: float) -> str:
     return f"${value:,.2f}"
 
 def _format_btc(value: float) -> str:
-    return f"{value:,.8f} BTC"
+    return f"{value:,.4f} BTC"
 
 def build_trade_message(decision: dict, portfolio: dict) -> str:
 
     action = decision.get("action", "hold").lower()
-    reason = decision.get("reason", "unknown")
+    reason = decision.get("reason", "unknown").replace("_", " ")
 
     value = float(decision.get("value", 0.0))
 
