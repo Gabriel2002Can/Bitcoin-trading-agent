@@ -7,3 +7,4 @@ pandas
 yfinance
 gspread
 groq
+python-telegram-bot

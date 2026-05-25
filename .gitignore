@@ -1,3 +1,4 @@
 *.env
 *.ipynb
 __pycache__
+time_info.json
