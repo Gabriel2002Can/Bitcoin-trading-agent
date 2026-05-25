@@ -26,6 +26,34 @@ def _format_money(value: float) -> str:
 def _format_btc(value: float) -> str:
     return f"{value:,.4f} BTC"
 
+def generate_weekly_report(trades):
+
+    total_trades = len(trades)
+
+    buys = len([
+        t for t in trades
+        if t["decision"]["action"] == "buy"
+    ])
+
+    sells = len([
+        t for t in trades
+        if t["decision"]["action"] == "sell"
+    ])
+
+    holds = len([
+        t for t in trades
+        if t["decision"]["action"] == "hold"
+    ])
+
+    return f"""
+Weekly Trading Summary
+
+Total trades: {total_trades}
+Buy trades: {buys}
+Sell trades: {sells}
+Hold decisions: {holds}
+"""
+
 def build_trade_message(decision: dict, portfolio: dict) -> str:
 
     action = decision.get("action", "hold").lower()

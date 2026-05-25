@@ -3,6 +3,7 @@ from app.core.metrics import Metrics
 from app.core.advisor import Advisor
 from app.core.time_manager import TimeManager
 from app.core.notifier_bot import NotifierBot
+from app.core.recorder import Recorder
 from app.core.helper_functions import *
 import json
 import datetime
@@ -134,9 +135,10 @@ class TradingAgent:
 
         # Strategy selection is authoritative and determines rule set
 
-        # Long Term: prioritize DCA trigger —> buy when price dropped at least the configured percent
+        # TODO: Delete DCA trigger?
+        # Long Term: prioritize DCA  —> buy when it reaches the cooldown
         if strategy == "long term" or strategy == "long_term" or strategy == "long-term":
-            if price_change <= -dca_trigger_pct and self.time_manager.check_cooldown():
+            if self.time_manager.check_dca_cooldown():
                 dca_triggered = True
                 self.time_manager.update_last_dca_trade()
 
@@ -152,7 +154,7 @@ class TradingAgent:
 
         # Hybrid or unknown: combine DCA trigger and model
         else:
-            if price_change <= -dca_trigger_pct and self.time_manager.check_cooldown():
+            if self.time_manager.check_dca_cooldown():
                 dca_triggered = True
                 self.time_manager.update_last_dca_trade()
             else:
@@ -381,7 +383,13 @@ class TradingAgent:
         message = build_trade_message(decision, self.configuration.portfolio)
 
         await self.notifier.send_telegram_message(message)
-        await self.notifier.send_gmail_email(message)
+
+    def _record_trade(self, decision) -> None:
+        recorder = Recorder()
+
+        serialized_trade = self._serialize_decision(decision)
+
+        recorder.save_trade(serialized_trade)
 
     def tick(self) -> dict:
         decision = self._evaluate_strategies()
@@ -390,5 +398,8 @@ class TradingAgent:
         self._execute_trade(final_decision)
 
         asyncio.run(self._notify(final_decision))
+
+        # Register Locally
+        self._record_trade(final_decision)
 
         return final_decision
