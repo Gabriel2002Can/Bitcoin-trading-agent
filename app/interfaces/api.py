@@ -19,17 +19,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 class SimpleConfig:
     def __init__(self):
         self.all = {
-            "DCA Amount": 500,
-            "DCA Trigger": "3%",
+            "dca_amount": 500,
+            "dca_time": "14",
             "buy_amount": 250,
             "sell_amount": "10%",
-            "Strategy": "Hybrid",
+            "strategy": "Hybrid",
         }
-
 
 def build_agent():
     # get fresh market data
