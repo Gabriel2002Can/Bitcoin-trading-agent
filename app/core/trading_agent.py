@@ -15,7 +15,7 @@ except Exception:
     requests = None
 
 # Helper Function
-# parse DCA trigger into a fraction ('3%' -> 0.03)
+# parse % into a fraction ('3%' -> 0.03)
 def _parse_percent(val, default_pct=0.03):
     try:
         if val is None:
@@ -62,15 +62,11 @@ class TradingAgent:
             prev_close = None
             price_change_pct = 0.0
 
-        # parse DCA trigger from config (keeps as raw for model visibility too)
-        raw_dca = self.configuration.all.get("dca_trigger", None)
-
         return {
             "strategy": self.configuration.all.get("strategy", "Long Term"),
             "current_price": self.metrics.entry_price,
             "previous_close": prev_close,
             "price_change_pct": price_change_pct,
-            "dca_trigger_raw": raw_dca,
             "stop_loss": self.metrics.get_latest_value("StopLoss"),
             "rsi": self.metrics.get_latest_value("RSI"),
             "ema": self.metrics.get_latest_value("EMA"),
@@ -122,14 +118,9 @@ class TradingAgent:
         except Exception:
             pass
 
-        dca_trigger_pct = _parse_percent(context.get("dca_trigger_raw"))
-
         dca_triggered = False
 
         metrics_score = 0
-
-        # compute price drop pct (negative when price fell)
-        price_change = context.get("price_change_pct", 0.0)
 
         strategy = str(context.get("strategy", self.configuration.all.get("Strategy", "Long Term"))).strip().lower()
 
@@ -140,7 +131,6 @@ class TradingAgent:
         if strategy == "long term" or strategy == "long_term" or strategy == "long-term":
             if self.time_manager.check_dca_cooldown():
                 dca_triggered = True
-                self.time_manager.update_last_dca_trade()
 
         # Swing Trade: follow the model opinion primarily
         elif strategy == "swing trade" or strategy == "swing_trade" or strategy == "swing-trade":
@@ -156,7 +146,6 @@ class TradingAgent:
         else:
             if self.time_manager.check_dca_cooldown():
                 dca_triggered = True
-                self.time_manager.update_last_dca_trade()
             else:
                 
                 rsi_score  = (50 - context.get("rsi", 50)) / 50.0   # Value between 1 and -1
@@ -170,7 +159,6 @@ class TradingAgent:
             "strategy": context["strategy"],
             "opinion": opinion, # Model's opinion
             "dca_triggered": dca_triggered, # If DCA was triggered
-            "dca_trigger_pct": dca_trigger_pct, # The drop percentage it drops
             "metrics_score": metrics_score, # The total scored throught all metrics
             "context": context, # Context dict
         }
@@ -238,6 +226,7 @@ class TradingAgent:
                 decision["reason"] = "not_enough_balance"
                 return decision
 
+            self.time_manager.update_last_dca_trade()
             decision["action"] = "buy"
             decision["reason"] = "dca_triggered"
             decision["value"] = dca_base_value
@@ -301,10 +290,10 @@ class TradingAgent:
         out = {}
 
         # Copy of simple fields
-        for k in ["strategy", "dca_triggered", "dca_trigger_pct", "metrics_score", "scores", "action", "reason", "value"]:
+        for k in ["strategy", "dca_triggered", "metrics_score", "scores", "action", "reason", "value"]:
             if k in decision:
                 try:
-                    out[k] = float(decision[k]) if isinstance(decision[k], (int, float)) and not isinstance(decision[k], bool) and k in ("dca_trigger_pct","metrics_score","value") else decision[k]
+                    out[k] = float(decision[k]) if isinstance(decision[k], (int, float)) and not isinstance(decision[k], bool) and k in ("metrics_score","value") else decision[k]
                 except Exception:
                     out[k] = decision[k]
 

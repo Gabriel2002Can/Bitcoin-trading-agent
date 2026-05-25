@@ -1,14 +1,14 @@
 def _portfolio_snapshot(quotation: float, portfolio: dict) -> dict:
 
     portfolio_dollar = float(
-        portfolio.get("portfolio_value")
-        or portfolio.get("Portfolio Value $")
+        portfolio.get("portfolio_value").replace(",",".")
+        or portfolio.get("Portfolio Value $").replace(",",".")
         or 0.0
     )
 
     portfolio_btc = float(
-        portfolio.get("portfolio_btc")
-        or portfolio.get("Portfolio Value BTC")
+        portfolio.get("portfolio_btc").replace(",",".")
+        or portfolio.get("Portfolio Value BTC").replace(",",".")
         or 0.0
     )
 
@@ -88,10 +88,6 @@ def build_trade_message(decision: dict, portfolio: dict) -> str:
 
     price_change_pct = float(
         context.get("price_change_pct", 0.0)
-    )
-
-    dca_trigger_pct = float(
-        decision.get("dca_trigger_pct", 0.0)
     )
 
     metrics_score = float(
@@ -179,7 +175,6 @@ def build_trade_message(decision: dict, portfolio: dict) -> str:
         f"• Stop Loss: {_format_money(stop_loss)}",
         f"• ATR: {atr:.4f}",
         f"• Price Change: {price_change_pct:.2%}",
-        f"• DCA Trigger: {dca_trigger_pct:.2%}",
         "",
     ])
 

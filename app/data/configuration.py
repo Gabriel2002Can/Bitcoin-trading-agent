@@ -12,7 +12,7 @@ class Configuration:
     portfolio_options = ["Portfolio Value $", "Portfolio Value BTC"]
 
     # Contains all options presented in the google sheet
-    options = ["Tick Interval" , "ATR Period", "EMA Span", "SMA Window", "RSI Period", "MACD Fast", "MACD Slow", "MACD Signal", "Strategy", "Stop Loss Multiplier", "DCA Time", "DCA Amount", "DCA Trigger", "Swing Buy Amount","Swing Sell Amount"]
+    options = ["Tick Interval" , "ATR Period", "EMA Span", "SMA Window", "RSI Period", "MACD Fast", "MACD Slow", "MACD Signal", "Strategy", "Stop Loss Multiplier", "DCA Time", "DCA Amount", "Swing Buy Amount","Swing Sell Amount"]
     
     def __init__(self, config_names: list[str] = options, sheet_name: str = "Settings") -> None:
 
@@ -53,13 +53,13 @@ class Configuration:
         
         if diff_dollar:
             cell_obj_dollar = self.sheet.find("Portfolio Value $")
-            value = float(self.portfolio["portfolio_value"].replace(",", ".")) + float(diff_dollar.replace(",", "."))
+            value = float(self.portfolio["portfolio_value"].replace(",", ".")) + float(diff_dollar)
 
             self.sheet.update_cell(cell_obj_dollar.row, cell_obj_dollar.col + 2, value)
         
         if diff_btc:
             cell_obj_btc = self.sheet.find("Portfolio Value BTC")
-            value = float(self.portfolio["portfolio_btc"].replace(",", ".")) + float(diff_btc.replace(",", "."))
+            value = float(self.portfolio["portfolio_btc"].replace(",", ".")) + float(diff_btc)
 
             self.sheet.update_cell(cell_obj_btc.row, cell_obj_btc.col + 2, value)
         
