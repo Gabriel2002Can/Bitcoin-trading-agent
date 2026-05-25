@@ -15,10 +15,10 @@ print(config.all)
 
 print("\n"*5)
 
-print(f'Dollars: ${config.portfolio["portfolio_value"]} --- BTC: {config.portfolio["portfolio_btc"]}')
+print(f'Dollars: ${config.portfolio["portfolio_value"]} --- BTC: {config.portfolio["portfolio_btc"].replace(",",".")}')
 
 print(trading_agent.tick())
 
 print("\n"*5)
 
-print(f'Dollars: ${config.portfolio["portfolio_value"]} --- BTC: {config.portfolio["portfolio_btc"]}')
+print(f'Dollars: ${config.portfolio["portfolio_value"]} --- BTC: {config.portfolio["portfolio_btc"].replace(",",".")}')
