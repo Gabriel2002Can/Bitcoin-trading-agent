@@ -2,11 +2,11 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from data import get_data
-from configuration import Configuration
-from metrics import Metrics
-from advisor import Advisor
-from tradingAgent import TradingAgent
+from app.data.finance_data import get_data
+from app.data.configuration import Configuration
+from app.core.metrics import Metrics
+from app.core.advisor import Advisor
+from app.core.trading_agent import TradingAgent
 import os
 
 app = FastAPI()
@@ -19,17 +19,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 class SimpleConfig:
     def __init__(self):
         self.all = {
-            "DCA Amount": 500,
-            "DCA Trigger": "3%",
+            "dca_amount": 500,
+            "dca_time": "14",
             "buy_amount": 250,
             "sell_amount": "10%",
-            "Strategy": "Hybrid",
+            "strategy": "Hybrid",
+        }
+        self.portfolio = {
+            "portfolio_value": "10000",
+            "portfolio_btc": "0",
         }
 
+    def change_portfolio(self, diff_dollar=None, diff_btc=None):
+        # Local no-op-ish portfolio update to keep TradingAgent contract intact.
+        try:
+            current_dollar = float(str(self.portfolio.get("portfolio_value", "0")).replace(",", "."))
+            current_btc = float(str(self.portfolio.get("portfolio_btc", "0")).replace(",", "."))
+            if diff_dollar is not None:
+                current_dollar += float(diff_dollar)
+            if diff_btc is not None:
+                current_btc += float(diff_btc)
+            self.portfolio["portfolio_value"] = str(current_dollar)
+            self.portfolio["portfolio_btc"] = str(current_btc)
+        except Exception:
+            pass
 
 def build_agent():
     # get fresh market data
@@ -63,14 +79,13 @@ def build_agent():
     agent = TradingAgent(config, metrics, advisor)
     return agent, BTC
 
-
 @app.get("/tick")
 def get_tick():
     agent, BTC = build_agent()
     if agent is None:
         return JSONResponse({"error": "failed_to_get_data"}, status_code=500)
     try:
-        payload = agent.tick_json()
+        payload = agent.tick_json(simulate=True)
         # include a few basic market fields
         if BTC:
             payload.setdefault("market", {})

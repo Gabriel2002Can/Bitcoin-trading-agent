@@ -1,9 +1,13 @@
-from configuration import Configuration
-from metrics import Metrics
-from advisor import Advisor
+from app.data.configuration import Configuration
+from app.core.metrics import Metrics
+from app.core.advisor import Advisor
+from app.core.time_manager import TimeManager
+from app.core.notifier_bot import NotifierBot
+from app.core.recorder import Recorder
+from app.core.helper_functions import *
 import json
 import datetime
-import os
+import asyncio
 
 try:
     import requests
@@ -11,7 +15,7 @@ except Exception:
     requests = None
 
 # Helper Function
-# parse DCA trigger into a fraction ('3%' -> 0.03)
+# parse % into a fraction ('3%' -> 0.03)
 def _parse_percent(val, default_pct=0.03):
     try:
         if val is None:
@@ -26,6 +30,12 @@ def _parse_percent(val, default_pct=0.03):
     except Exception:
         return default_pct
 
+def _dollar_to_btc(dollar: float, btc_quotation: float) -> float:
+    return dollar/btc_quotation
+
+def _btc_to_dollar(btc_amount: float, btc_quotation: float) -> float:
+    return btc_amount*btc_quotation
+    
 class TradingAgent:
     """Uses metrics and the current configurations to evaluate which strategy should be used and its paramethers.
     """
@@ -35,10 +45,15 @@ class TradingAgent:
         self.metrics = metrics
         self.model = model
 
-    def build_context(self):
+        self.notifier = NotifierBot()
+
+        self.time_manager = TimeManager(self.configuration)
+
+    def _build_context(self):
         # compute previous close and percent change where possible
         prev_close = None
         price_change_pct = 0.0
+
         try:
             if self.metrics.data is not None and "Close" in self.metrics.data.columns and len(self.metrics.data["Close"]) >= 2:
                 prev_close = float(self.metrics.data["Close"].iloc[-2])
@@ -47,15 +62,11 @@ class TradingAgent:
             prev_close = None
             price_change_pct = 0.0
 
-        # parse DCA trigger from config (keeps as raw for model visibility too)
-        raw_dca = self.configuration.all.get("DCA Trigger", None)
-
         return {
             "strategy": self.configuration.all.get("strategy", "Long Term"),
             "current_price": self.metrics.entry_price,
             "previous_close": prev_close,
             "price_change_pct": price_change_pct,
-            "dca_trigger_raw": raw_dca,
             "stop_loss": self.metrics.get_latest_value("StopLoss"),
             "rsi": self.metrics.get_latest_value("RSI"),
             "ema": self.metrics.get_latest_value("EMA"),
@@ -69,8 +80,35 @@ class TradingAgent:
             "sell_amount":self.configuration.all.get("sell_amount","10%"),
         }
 
-    def evaluate_strategies(self):
-        context = self.build_context()
+    def _check_balance(self, dollar_value = None, btc_value = None) -> bool:
+        # If portfolio data is unavailable (fallback/offline mode), skip hard balance checks.
+        if not hasattr(self.configuration, "portfolio") or not isinstance(self.configuration.portfolio, dict):
+            return True
+
+        portfolio = self.configuration.portfolio
+
+        def _to_float(value, default=0.0):
+            try:
+                return float(str(value).replace(",", "."))
+            except Exception:
+                return default
+
+        dollar_portfolio = _to_float(
+            portfolio.get("portfolio_value", portfolio.get("Portfolio Value $", 0))
+        )
+        btc_portfolio = _to_float(
+            portfolio.get("portfolio_btc", portfolio.get("Portfolio Value BTC", 0))
+        )
+
+        if dollar_value and dollar_value > dollar_portfolio:
+            return False
+        elif btc_value and btc_portfolio <= 0:
+            return False
+
+        return True
+
+    def _evaluate_strategies(self):
+        context = self._build_context()
         opinion = self.model.analyze(context)
 
         # Bug Fixed
@@ -96,23 +134,18 @@ class TradingAgent:
         except Exception:
             pass
 
-        dca_trigger_pct = _parse_percent(context.get("dca_trigger_raw"))
-
         dca_triggered = False
 
         metrics_score = 0
-
-        # compute price drop pct (negative when price fell)
-        price_change = context.get("price_change_pct", 0.0)
 
         strategy = str(context.get("strategy", self.configuration.all.get("Strategy", "Long Term"))).strip().lower()
 
         # Strategy selection is authoritative and determines rule set
 
-        # TODO: add a sell function for Long Term
-        # Long Term: prioritize DCA trigger —> buy when price dropped at least the configured percent
+        # TODO: Delete DCA trigger?
+        # Long Term: prioritize DCA  —> buy when it reaches the cooldown
         if strategy == "long term" or strategy == "long_term" or strategy == "long-term":
-            if price_change <= -dca_trigger_pct:
+            if self.time_manager.check_dca_cooldown():
                 dca_triggered = True
 
         # Swing Trade: follow the model opinion primarily
@@ -127,7 +160,7 @@ class TradingAgent:
 
         # Hybrid or unknown: combine DCA trigger and model
         else:
-            if price_change <= -dca_trigger_pct:
+            if self.time_manager.check_dca_cooldown():
                 dca_triggered = True
             else:
                 
@@ -142,12 +175,11 @@ class TradingAgent:
             "strategy": context["strategy"],
             "opinion": opinion, # Model's opinion
             "dca_triggered": dca_triggered, # If DCA was triggered
-            "dca_trigger_pct": dca_trigger_pct, # The drop percentage it drops
             "metrics_score": metrics_score, # The total scored throught all metrics
             "context": context, # Context dict
         }
 
-    def execute_strategies(self, decision):
+    def _execute_strategies(self, decision):
         current = decision["context"]["current_price"]
         stop_loss = decision["context"]["stop_loss"]
 
@@ -160,8 +192,8 @@ class TradingAgent:
         final_score = (model_score * 0.4) + (decision["metrics_score"] * 0.6)
 
         # TODO: Configure sensibility threshold via config sheet
-        buy_trigger = final_score >= 0.4
-        sell_trigger = final_score <= - 0.4
+        buy_trigger = final_score >= 0.3
+        sell_trigger = final_score <= - 0.3
 
         # Base values definied on the config sheet
         buy_base_value = float(decision["context"]["buy_amount"])
@@ -169,10 +201,17 @@ class TradingAgent:
 
         dca_base_value = decision["context"]["dca_amount"]
 
-        decision["scores"] = f'Models score: {model_score} Metrics score: {decision["metrics_score"]}'
+        decision["scores"] = f'Models score: {model_score:.3f} Metrics score: {decision["metrics_score"]:.3f} -> Final score: {final_score:.3f}'
 
         # If stop loss triggered SELL
         if current <= stop_loss:
+
+            if not self._check_balance(btc_value=sell_base_value):
+                decision["action"] = "hold"
+                decision["value"] = 0.0
+                decision["reason"] = "no_bitcoins_in_portfolio"
+                return decision
+            
             decision["action"] = "sell"
             decision["reason"] = "stop_loss_triggered"
             decision["value"] = sell_base_value 
@@ -180,13 +219,30 @@ class TradingAgent:
 
         # Opportunistic SELL
         if sell_trigger:
+
+            value = sell_base_value * (abs(1 + final_score)) 
+
+            if not self._check_balance(btc_value=value):
+                decision["action"] = "hold"
+                decision["value"] = 0.0
+                decision["reason"] = "no_bitcoins_in_portfolio"
+                return decision
+
             decision["action"] = "sell"
             decision["reason"] = "opportunistic_sell"
-            decision["value"] = sell_base_value * (abs(1 + final_score)) # In Percentage
+            decision["value"] = value # In Percentage
             return decision
 
         # If DCA TRIGGERED
         if decision.get("dca_triggered", False):
+
+            if not self._check_balance(dollar_value=dca_base_value):
+                decision["action"] = "hold"
+                decision["value"] = 0.0
+                decision["reason"] = "not_enough_balance"
+                return decision
+
+            self.time_manager.update_last_dca_trade()
             decision["action"] = "buy"
             decision["reason"] = "dca_triggered"
             decision["value"] = dca_base_value
@@ -194,9 +250,18 @@ class TradingAgent:
         
         # Opportunistic BUY
         if buy_trigger:
+
+            value = buy_base_value * (1 + final_score)
+
+            if not self._check_balance(dollar_value=value):
+                decision["action"] = "hold"
+                decision["value"] = 0.0
+                decision["reason"] = "not_enough_balance"
+                return decision
+            
             decision["action"] = "buy"
             decision["reason"] = "opportunistic_buy"
-            decision["value"] = buy_base_value * (1 + final_score)
+            decision["value"] = value
             return decision
 
         # HOLD if current context is not ideal
@@ -209,33 +274,45 @@ class TradingAgent:
         # "reason": Y
         # "value": Z
 
-    def tick(self):
-        decision = self.evaluate_strategies()
-        final_decision = self.execute_strategies(decision)
-        # attempt to notify an external endpoint if configured
-        notify_url = os.getenv("FASTAPI_NOTIFY_URL", None)
-        if notify_url:
-            try:
-                self.notify(final_decision, notify_url)
-            except Exception:
-                pass
-        return final_decision
+    def _execute_trade(self, decision) -> None:
 
-    def serialize_decision(self, decision: dict) -> dict:
+        if not hasattr(self.configuration, "change_portfolio"):
+            return
+
+        action = decision.get("action", "hold")
+        value = float(decision.get("value", 0))
+        quotation = float(decision["context"].get("current_price", 0))
+
+        if action == "buy":
+
+            diff_dollar = -value
+            diff_btc = _dollar_to_btc(value, quotation)
+
+            self.configuration.change_portfolio(diff_dollar, diff_btc)
+        
+        elif action == "sell":
+            
+            value = value * float(self.configuration.portfolio["portfolio_btc"].replace(",", "."))
+
+            diff_btc = -value
+            diff_dollar = _btc_to_dollar(value, quotation)
+
+            self.configuration.change_portfolio(diff_dollar, diff_btc)
+
+    def _serialize_decision(self, decision: dict) -> dict:
         """Return a JSON-safe version of the decision dict.
 
         - Ensures `opinion` is a plain dict.
         - Converts pandas/numpy types to native Python types.
         - Normalizes sell_amount percentages into numeric and flags.
-        - Adds an ISO8601 `timestamp`.
         """
         out = {}
 
-        # shallow copy of simple fields
-        for k in ["strategy", "dca_triggered", "dca_trigger_pct", "metrics_score", "scores", "action", "reason", "value"]:
+        # Copy of simple fields
+        for k in ["strategy", "dca_triggered", "metrics_score", "scores", "action", "reason", "value"]:
             if k in decision:
                 try:
-                    out[k] = float(decision[k]) if isinstance(decision[k], (int, float)) and not isinstance(decision[k], bool) and k in ("dca_trigger_pct","metrics_score","value") else decision[k]
+                    out[k] = float(decision[k]) if isinstance(decision[k], (int, float)) and not isinstance(decision[k], bool) and k in ("metrics_score","value") else decision[k]
                 except Exception:
                     out[k] = decision[k]
 
@@ -301,20 +378,49 @@ class TradingAgent:
 
         return out
 
-    def tick_json(self) -> dict:
-        """Call `tick()` and return a JSON-safe dict suitable for APIs or frontends."""
-        dec = self.tick()
-        try:
-            return self.serialize_decision(dec)
-        except Exception:
-            return {"error": "serialization_failed"}
+    def tick_json(self, simulate: bool = True) -> dict:
+        """Return a JSON-safe decision payload for APIs/frontends.
 
-    def notify(self, decision: dict, endpoint: str) -> None:
-        """POST the serialized decision to `endpoint` as JSON. Requires `requests` package."""
-        if requests is None:
-            return
-        payload = self.serialize_decision(decision)
+        simulate=True avoids side effects (portfolio updates, notifications, persistence),
+        which is the expected behavior for dashboard polling endpoints.
+        """
         try:
-            requests.post(endpoint, json=payload, timeout=2)
-        except Exception:
-            pass
+            if simulate:
+                decision = self._evaluate_strategies()
+                final_decision = self._execute_strategies(decision)
+                return self._serialize_decision(final_decision)
+
+            dec = self.tick()
+            return self._serialize_decision(dec)
+        except Exception as e:
+            return {"error": "tick_json_failed", "detail": str(e)}
+
+    def _tick_json(self) -> dict:
+        """Backward-compatible alias for older callers."""
+        return self.tick_json(simulate=True)
+        
+    async def _notify(self, decision) -> None:
+
+        message = build_trade_message(decision, self.configuration.portfolio)
+
+        await self.notifier.send_telegram_message(message)
+
+    def _record_trade(self, decision) -> None:
+        recorder = Recorder()
+
+        serialized_trade = self._serialize_decision(decision)
+
+        recorder.save_trade(serialized_trade)
+
+    def tick(self) -> dict:
+        decision = self._evaluate_strategies()
+        final_decision = self._execute_strategies(decision)
+
+        self._execute_trade(final_decision)
+
+        asyncio.run(self._notify(final_decision))
+
+        # Register Locally
+        self._record_trade(final_decision)
+
+        return final_decision

@@ -20,6 +20,16 @@ def fetch_tick(url: str) -> Dict[str, Any] | None:
         st.caption("Tip: ensure FastAPI is running and allow a few seconds for /tick to compute.")
         return None
 
+
+def format_context_value(value: Any) -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if isinstance(value, (int, float)):
+        return f"{value:,.6f}".rstrip("0").rstrip(".")
+    return str(value)
+
 if st.sidebar.button("Refresh"):
     st.session_state.payload = fetch_tick(api_url)
 
@@ -91,7 +101,7 @@ else:
     rows = []
     for k in keys:
         if k in context:
-            rows.append({"metric": k, "value": context.get(k)})
+            rows.append({"metric": k, "value": format_context_value(context.get(k))})
 
     if rows:
         st.table(rows)
