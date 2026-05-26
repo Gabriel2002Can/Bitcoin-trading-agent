@@ -85,7 +85,7 @@ def get_tick():
     if agent is None:
         return JSONResponse({"error": "failed_to_get_data"}, status_code=500)
     try:
-        payload = agent.tick_json(simulate=True)
+        payload = agent.tick_json(simulate=False)
         # include a few basic market fields
         if BTC:
             payload.setdefault("market", {})
@@ -97,11 +97,9 @@ def get_tick():
     except Exception as e:
         return JSONResponse({"error": "internal_error", "detail": str(e)}, status_code=500)
 
-
 @app.get("/health")
 def health():
     return {"status": "ok"}
-
 
 @app.get("/")
 def root():

@@ -378,7 +378,7 @@ class TradingAgent:
 
         return out
 
-    def tick_json(self, simulate: bool = True) -> dict:
+    def tick_json(self, simulate: bool = False) -> dict:
         """Return a JSON-safe decision payload for APIs/frontends.
 
         simulate=True avoids side effects (portfolio updates, notifications, persistence),
@@ -395,10 +395,6 @@ class TradingAgent:
         except Exception as e:
             return {"error": "tick_json_failed", "detail": str(e)}
 
-    def _tick_json(self) -> dict:
-        """Backward-compatible alias for older callers."""
-        return self.tick_json(simulate=True)
-        
     async def _notify(self, decision) -> None:
 
         message = build_trade_message(decision, self.configuration.portfolio)
