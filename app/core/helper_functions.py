@@ -1,15 +1,20 @@
+def _to_float(value, default: float = 0.0) -> float:
+    try:
+        if value is None:
+            return default
+        return float(str(value).replace(",", "."))
+    except Exception:
+        return default
+
+
 def _portfolio_snapshot(quotation: float, portfolio: dict) -> dict:
 
-    portfolio_dollar = float(
-        portfolio.get("portfolio_value").replace(",",".")
-        or portfolio.get("Portfolio Value $").replace(",",".")
-        or 0.0
+    portfolio_dollar = _to_float(
+        portfolio.get("portfolio_value", portfolio.get("Portfolio Value $", 0.0))
     )
 
-    portfolio_btc = float(
-        portfolio.get("portfolio_btc").replace(",",".")
-        or portfolio.get("Portfolio Value BTC").replace(",",".")
-        or 0.0
+    portfolio_btc = _to_float(
+        portfolio.get("portfolio_btc", portfolio.get("Portfolio Value BTC", 0.0))
     )
 
     total_value_usd = portfolio_dollar + (portfolio_btc * quotation)
@@ -18,6 +23,34 @@ def _portfolio_snapshot(quotation: float, portfolio: dict) -> dict:
         "portfolio_dollar": portfolio_dollar,
         "portfolio_btc": portfolio_btc,
         "total_value_usd": total_value_usd,
+    }
+
+
+def _project_portfolio_after_trade(action: str, value: float, quotation: float, portfolio: dict) -> dict:
+
+    current_snapshot = _portfolio_snapshot(quotation, portfolio)
+
+    cash_delta = 0.0
+    btc_delta = 0.0
+
+    if action == "buy" and quotation:
+        cash_delta = -value
+        btc_delta = value / quotation
+
+    elif action == "sell" and quotation:
+        sell_ratio = value if value <= 1 else value / 100.0
+        btc_delta = -current_snapshot["portfolio_btc"] * sell_ratio
+        cash_delta = -btc_delta * quotation
+
+    updated_cash = current_snapshot["portfolio_dollar"] + cash_delta
+    updated_btc = current_snapshot["portfolio_btc"] + btc_delta
+
+    return {
+        **current_snapshot,
+        "cash_delta": cash_delta,
+        "btc_delta": btc_delta,
+        "updated_cash": updated_cash,
+        "updated_btc": updated_btc
     }
 
 def _format_money(value: float) -> str:
@@ -76,7 +109,7 @@ def build_trade_message(decision: dict, portfolio: dict) -> str:
         context.get("strategy", "unknown")
     )
 
-    portfolio = _portfolio_snapshot(quotation, portfolio)
+    portfolio = _project_portfolio_after_trade(action, value, quotation, portfolio)
 
     current_price = float(context.get("current_price", 0.0))
     stop_loss = float(context.get("stop_loss", 0.0))
@@ -223,10 +256,13 @@ def build_trade_message(decision: dict, portfolio: dict) -> str:
     # PORTFOLIO
     # =========================
 
+    cash_delta = portfolio["cash_delta"]
+    btc_delta = portfolio["btc_delta"]
+
     lines.extend([
         "*=== Portfolio Snapshot ===*",
-        f"• Cash Balance: {_format_money(portfolio['portfolio_dollar'])}",
-        f"• BTC Holdings: {_format_btc(portfolio['portfolio_btc'])}",
+        f"• Cash Balance: {_format_money(portfolio['portfolio_dollar'])} -> {_format_money(portfolio['updated_cash'])} ({_format_money(cash_delta)})",
+        f"• BTC Holdings: {_format_btc(portfolio['portfolio_btc'])} -> {_format_btc(portfolio['updated_btc'])} ({_format_btc(btc_delta)})",
         f"• Total Portfolio Value: {_format_money(portfolio['total_value_usd'])}",
         "",
         "==============================",
