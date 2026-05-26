@@ -38,7 +38,7 @@ class Configuration:
         "Swing Sell Amount",
     ]
 
-    cache_refresh_interval = timedelta(minutes=30)
+    cache_refresh_interval = timedelta(minutes=1)
     cache_file_name = "config_cache.json"
 
     config_aliases = {

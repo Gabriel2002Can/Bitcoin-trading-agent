@@ -72,7 +72,7 @@ class TimeManager:
         raw_interval = None
 
         if hasattr(config, "all") and isinstance(config.all, dict):
-            raw_interval = config.all.get("Tick Interval", config.all.get("tick_interval", 60))
+            raw_interval = config.all.get("tick_interval", config.all.get("Tick Interval", 60))
 
         interval_minutes = self._parse_tick_interval_minutes(raw_interval)
         interval_minutes = max(1, min(interval_minutes, 60))

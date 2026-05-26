@@ -150,7 +150,7 @@ def build_trade_message(decision: dict, portfolio: dict) -> str:
 
     elif action == "sell":
 
-        sell_pct = float(context.get("sell_amount", 0.0))
+        sell_pct = float(context.get("sell_amount", 0.0).replace("%",""))
 
         portfolio_btc = portfolio["portfolio_btc"]
 
