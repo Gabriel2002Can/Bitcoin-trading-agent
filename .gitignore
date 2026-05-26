@@ -3,3 +3,4 @@
 __pycache__
 time_info.json
 *.jsonl
+config_cache.json

@@ -418,5 +418,6 @@ class TradingAgent:
 
         # Register Locally
         self._record_trade(final_decision)
+        self.time_manager.update_last_tick()
 
         return final_decision

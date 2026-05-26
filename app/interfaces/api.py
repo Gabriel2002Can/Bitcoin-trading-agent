@@ -85,7 +85,7 @@ def get_tick():
     if agent is None:
         return JSONResponse({"error": "failed_to_get_data"}, status_code=500)
     try:
-        payload = agent.tick_json(simulate=False)
+        payload = agent.tick_json(simulate=True)
         # include a few basic market fields
         if BTC:
             payload.setdefault("market", {})
