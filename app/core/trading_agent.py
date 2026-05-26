@@ -111,9 +111,6 @@ class TradingAgent:
         context = self._build_context()
         opinion = self.model.analyze(context)
 
-        # Bug Fixed
-        # normalize opinion: the model may return a ChatCompletionMessage-like
-        # object whose `content` is a JSON string. Parse it into a dict.
         try:
             import json
 
@@ -142,7 +139,6 @@ class TradingAgent:
 
         # Strategy selection is authoritative and determines rule set
 
-        # TODO: Delete DCA trigger?
         # Long Term: prioritize DCA  —> buy when it reaches the cooldown
         if strategy == "long term" or strategy == "long_term" or strategy == "long-term":
             if self.time_manager.check_dca_cooldown():
@@ -152,11 +148,14 @@ class TradingAgent:
         elif strategy == "swing trade" or strategy == "swing_trade" or strategy == "swing-trade":
 
             rsi_score  = (50 - context.get("rsi", 50)) / 50.0   # Value between 1 and -1
-            macd_score = max(-1, min(1, context.get("macd_histogram", 0) / 50.0))   # Value between 1 and -1
-            sma_score  = max(-1, min(1, (context.get("current_price", 0) - context.get("sma", 1)) / context.get("sma", 1))) # Value between 1 and -1
+
+            atr = max(context.get("atr", 1), 1e-9)
+            macd_score = max( -1, min(1, context.get("macd_histogram", 0) / atr)) # Value between 1 and -1
+
+            sma_score = max(-1, min(1, (context.get("current_price", 0) - context.get("sma", 1)) / context.get("sma", 1))) # Value between 1 and -1
 
             # sma score should impact less the score that the other metrics
-            metrics_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 and -1
+            metrics_score = (rsi_score * (0.45)) + (macd_score * (0.4)) + (sma_score * (0.15)) # Value between = 1 and -1
 
         # Hybrid or unknown: combine DCA trigger and model
         else:
@@ -165,11 +164,14 @@ class TradingAgent:
             else:
                 
                 rsi_score  = (50 - context.get("rsi", 50)) / 50.0   # Value between 1 and -1
-                macd_score = max(-1, min(1, context.get("macd_histogram", 0) / 50.0))   # Value between 1 and -1
+
+                atr = max(context.get("atr", 1), 1e-9)
+                macd_score = max( -1, min(1, context.get("macd_histogram", 0) / atr)) # Value between 1 and -1
+
                 sma_score  = max(-1, min(1, (context.get("current_price", 0) - context.get("sma", 1)) / context.get("sma", 1))) # Value between 1 and -1
 
                 # sma score should impact less the score that the other metrics
-                metrics_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 and -1
+                metrics_score = (rsi_score * (0.45)) + (macd_score * (0.4)) + (sma_score * (0.15)) # Value between = 1 and -1
 
         return {
             "strategy": context["strategy"],
@@ -189,7 +191,7 @@ class TradingAgent:
         model_score = model_opinion["confidence"] * multiplier
 
         # Get both model suggestion and numeric
-        final_score = (model_score * 0.4) + (decision["metrics_score"] * 0.6)
+        final_score = (model_score * 0.5) + (decision["metrics_score"] * 0.5)
 
         # TODO: Configure sensibility threshold via config sheet
         buy_trigger = final_score >= 0.3
@@ -372,6 +374,31 @@ class TradingAgent:
             ctx_out["sell_amount_is_percent"] = False
 
         out["context"] = ctx_out
+
+        portfolio_snapshot = {}
+        if hasattr(self.configuration, "portfolio") and isinstance(self.configuration.portfolio, dict):
+            def _to_float(value, default=0.0):
+                try:
+                    return float(str(value).replace(",", "."))
+                except Exception:
+                    return default
+
+            current_price = _to_float(ctx_out.get("current_price", 0.0))
+            cash_balance = _to_float(
+                self.configuration.portfolio.get("portfolio_value", self.configuration.portfolio.get("Portfolio Value $", 0.0))
+            )
+            btc_holdings = _to_float(
+                self.configuration.portfolio.get("portfolio_btc", self.configuration.portfolio.get("Portfolio Value BTC", 0.0))
+            )
+
+            portfolio_snapshot = {
+                "cash_balance": cash_balance,
+                "btc_holdings": btc_holdings,
+                "btc_price": current_price,
+                "total_portfolio_value": cash_balance + (btc_holdings * current_price),
+            }
+
+        out["portfolio_snapshot"] = portfolio_snapshot
 
         # timestamp
         out["timestamp"] = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"

@@ -18,16 +18,20 @@ class NotifierBot():
         bot = Bot(token=telegram_bot_token)
         await bot.send_message(chat_id = telegram_chat_id, text= message, parse_mode="Markdown")
     
-    async def send_gmail_email(self, message='test'):
+    async def send_gmail_email(self, message='test', subject='Trading Report'):
 
         load_dotenv()
         gmail_address = os.getenv("GMAIL_ADDRESS")
         gmail_app_password = os.getenv("GMAIL_APP_PASSWORD")
         to_email = os.getenv("GMAIL_TO_EMAIL")
 
+        if not gmail_address or not gmail_app_password or not to_email:
+            print("Gmail credentials are not configured; skipping email report.")
+            return
+
         msg = EmailMessage()
-        msg["Subject"] = "Trading Report"
-        msg["From"] = "Trading Bot"
+        msg["Subject"] = subject
+        msg["From"] = gmail_address
         msg["To"] = to_email
         msg.set_content(message)
 

@@ -28,24 +28,29 @@ def _format_btc(value: float) -> str:
 
 def generate_weekly_report(trades):
 
-    total_trades = len(trades)
+    try:
+        from app.core.trade_analytics import build_weekly_report
 
-    buys = len([
-        t for t in trades
-        if t["decision"]["action"] == "buy"
-    ])
+        return build_weekly_report(trades)
+    except Exception:
+        total_trades = len(trades)
 
-    sells = len([
-        t for t in trades
-        if t["decision"]["action"] == "sell"
-    ])
+        buys = len([
+            t for t in trades
+            if t.get("action") == "buy" or t.get("decision", {}).get("action") == "buy"
+        ])
 
-    holds = len([
-        t for t in trades
-        if t["decision"]["action"] == "hold"
-    ])
+        sells = len([
+            t for t in trades
+            if t.get("action") == "sell" or t.get("decision", {}).get("action") == "sell"
+        ])
 
-    return f"""
+        holds = len([
+            t for t in trades
+            if t.get("action") == "hold" or t.get("decision", {}).get("action") == "hold"
+        ])
+
+        return f"""
 Weekly Trading Summary
 
 Total trades: {total_trades}
