@@ -9,11 +9,6 @@ import json
 import datetime
 import asyncio
 
-try:
-    import requests
-except Exception:
-    requests = None
-
 # Helper Function
 # parse % into a fraction ('3%' -> 0.03)
 def _parse_percent(val, default_pct=0.03):
@@ -77,7 +72,9 @@ class TradingAgent:
             "macd_histogram": self.metrics.get_latest_value("MACD_histogram"),
             "atr": self.metrics.get_latest_value("ATR"),
             "buy_amount":self.configuration.all.get("buy_amount",250),
-            "sell_amount":self.configuration.all.get("sell_amount","10%"),
+            "sell_amount":self.configuration.all.get("sell_amount","10%").replace("%",""),
+            "buy_sensibility": self.configuration.all.get("buy_sensibility","0.3"),
+            "sell_sensibility": self.configuration.all.get("sell_sensibility","0.3")
         }
 
     def _check_balance(self, dollar_value = None, btc_value = None) -> bool:
@@ -111,9 +108,6 @@ class TradingAgent:
         context = self._build_context()
         opinion = self.model.analyze(context)
 
-        # Bug Fixed
-        # normalize opinion: the model may return a ChatCompletionMessage-like
-        # object whose `content` is a JSON string. Parse it into a dict.
         try:
             import json
 
@@ -142,7 +136,6 @@ class TradingAgent:
 
         # Strategy selection is authoritative and determines rule set
 
-        # TODO: Delete DCA trigger?
         # Long Term: prioritize DCA  —> buy when it reaches the cooldown
         if strategy == "long term" or strategy == "long_term" or strategy == "long-term":
             if self.time_manager.check_dca_cooldown():
@@ -152,11 +145,14 @@ class TradingAgent:
         elif strategy == "swing trade" or strategy == "swing_trade" or strategy == "swing-trade":
 
             rsi_score  = (50 - context.get("rsi", 50)) / 50.0   # Value between 1 and -1
-            macd_score = max(-1, min(1, context.get("macd_histogram", 0) / 50.0))   # Value between 1 and -1
-            sma_score  = max(-1, min(1, (context.get("current_price", 0) - context.get("sma", 1)) / context.get("sma", 1))) # Value between 1 and -1
+
+            atr = max(context.get("atr", 1), 1e-9)
+            macd_score = max( -1, min(1, context.get("macd_histogram", 0) / atr)) # Value between 1 and -1
+
+            sma_score = max(-1, min(1, (context.get("current_price", 0) - context.get("sma", 1)) / context.get("sma", 1))) # Value between 1 and -1
 
             # sma score should impact less the score that the other metrics
-            metrics_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 and -1
+            metrics_score = (rsi_score * (0.45)) + (macd_score * (0.4)) + (sma_score * (0.15)) # Value between = 1 and -1
 
         # Hybrid or unknown: combine DCA trigger and model
         else:
@@ -165,11 +161,14 @@ class TradingAgent:
             else:
                 
                 rsi_score  = (50 - context.get("rsi", 50)) / 50.0   # Value between 1 and -1
-                macd_score = max(-1, min(1, context.get("macd_histogram", 0) / 50.0))   # Value between 1 and -1
+
+                atr = max(context.get("atr", 1), 1e-9)
+                macd_score = max( -1, min(1, context.get("macd_histogram", 0) / atr)) # Value between 1 and -1
+
                 sma_score  = max(-1, min(1, (context.get("current_price", 0) - context.get("sma", 1)) / context.get("sma", 1))) # Value between 1 and -1
 
                 # sma score should impact less the score that the other metrics
-                metrics_score = (rsi_score * (0.4)) + (macd_score * (0.4)) + (sma_score * (0.2)) # Value between = 1 and -1
+                metrics_score = (rsi_score * (0.45)) + (macd_score * (0.4)) + (sma_score * (0.15)) # Value between = 1 and -1
 
         return {
             "strategy": context["strategy"],
@@ -189,15 +188,17 @@ class TradingAgent:
         model_score = model_opinion["confidence"] * multiplier
 
         # Get both model suggestion and numeric
-        final_score = (model_score * 0.4) + (decision["metrics_score"] * 0.6)
+        final_score = (model_score * 0.5) + (decision["metrics_score"] * 0.5)
 
-        # TODO: Configure sensibility threshold via config sheet
-        buy_trigger = final_score >= 0.3
-        sell_trigger = final_score <= - 0.3
+        buy_sensibility = float(decision["context"]["buy_sensibility"].replace(",","."))
+        sell_sensibility = float(decision["context"]["sell_sensibility"].replace(",","."))
+
+        buy_trigger = final_score >= buy_sensibility
+        sell_trigger = final_score <= - sell_sensibility
 
         # Base values definied on the config sheet
         buy_base_value = float(decision["context"]["buy_amount"])
-        sell_base_value = _parse_percent(decision["context"]["sell_amount"])
+        sell_base_value = _parse_percent(decision["context"]["sell_amount"].replace("%",""))
 
         dca_base_value = decision["context"]["dca_amount"]
 
@@ -373,12 +374,37 @@ class TradingAgent:
 
         out["context"] = ctx_out
 
+        portfolio_snapshot = {}
+        if hasattr(self.configuration, "portfolio") and isinstance(self.configuration.portfolio, dict):
+            def _to_float(value, default=0.0):
+                try:
+                    return float(str(value).replace(",", "."))
+                except Exception:
+                    return default
+
+            current_price = _to_float(ctx_out.get("current_price", 0.0))
+            cash_balance = _to_float(
+                self.configuration.portfolio.get("portfolio_value", self.configuration.portfolio.get("Portfolio Value $", 0.0))
+            )
+            btc_holdings = _to_float(
+                self.configuration.portfolio.get("portfolio_btc", self.configuration.portfolio.get("Portfolio Value BTC", 0.0))
+            )
+
+            portfolio_snapshot = {
+                "cash_balance": cash_balance,
+                "btc_holdings": btc_holdings,
+                "btc_price": current_price,
+                "total_portfolio_value": cash_balance + (btc_holdings * current_price),
+            }
+
+        out["portfolio_snapshot"] = portfolio_snapshot
+
         # timestamp
         out["timestamp"] = datetime.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
 
         return out
 
-    def tick_json(self, simulate: bool = True) -> dict:
+    def tick_json(self, simulate: bool = False) -> dict:
         """Return a JSON-safe decision payload for APIs/frontends.
 
         simulate=True avoids side effects (portfolio updates, notifications, persistence),
@@ -395,10 +421,6 @@ class TradingAgent:
         except Exception as e:
             return {"error": "tick_json_failed", "detail": str(e)}
 
-    def _tick_json(self) -> dict:
-        """Backward-compatible alias for older callers."""
-        return self.tick_json(simulate=True)
-        
     async def _notify(self, decision) -> None:
 
         message = build_trade_message(decision, self.configuration.portfolio)
@@ -422,5 +444,6 @@ class TradingAgent:
 
         # Register Locally
         self._record_trade(final_decision)
+        self.time_manager.update_last_tick()
 
         return final_decision

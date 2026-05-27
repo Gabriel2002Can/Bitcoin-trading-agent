@@ -13,12 +13,12 @@ trading_agent = TradingAgent(config,metrics_info,advisor)
 
 print(config.all)
 
-print("\n"*5)
+# print("\n"*5)
 
-print(f'Dollars: ${config.portfolio["portfolio_value"]} --- BTC: {config.portfolio["portfolio_btc"].replace(",",".")}')
+# print(f'Dollars: ${config.portfolio["portfolio_value"]} --- BTC: {config.portfolio["portfolio_btc"].replace(",",".")}')
 
-print(trading_agent.tick())
+# print(trading_agent.tick())
 
-print("\n"*5)
+# print("\n"*5)
 
-print(f'Dollars: ${config.portfolio["portfolio_value"]} --- BTC: {config.portfolio["portfolio_btc"].replace(",",".")}')
+# print(f'Dollars: ${config.portfolio["portfolio_value"]} --- BTC: {config.portfolio["portfolio_btc"].replace(",",".")}')
