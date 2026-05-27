@@ -77,7 +77,9 @@ def _flatten_trade(trade: dict[str, Any], source_file: str | None = None) -> dic
         "macd_histogram": _safe_float(context.get("macd_histogram")),
         "atr": _safe_float(context.get("atr")),
         "buy_amount": _safe_float(context.get("buy_amount")),
-        "sell_amount": _safe_float(context.get("sell_amount").replace("%","")),
+        "sell_amount": _safe_float(
+            str(context.get("sell_amount")).replace("%", "") if context.get("sell_amount") is not None else None
+        ),
         "sell_amount_is_percent": bool(context.get("sell_amount_is_percent", False)),
         "dca_amount": _safe_float(context.get("dca_amount")),
         "portfolio_cash": _safe_float(portfolio_snapshot.get("cash_balance")),
@@ -115,7 +117,10 @@ def load_trade_records(logs_folder: str | Path | None = None) -> list[dict[str, 
                         continue
 
                     if isinstance(trade, dict):
-                        records.append(_flatten_trade(trade, source_file=source_file))
+                        try:
+                            records.append(_flatten_trade(trade, source_file=source_file))
+                        except Exception:
+                            continue
         except Exception:
             continue
 
