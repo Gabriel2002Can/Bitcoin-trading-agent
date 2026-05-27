@@ -43,36 +43,67 @@ except ModuleNotFoundError:
 
 st.set_page_config(page_title="Trading Ledger Dashboard", page_icon="📈", layout="wide")
 
+ACTION_DOMAIN = ["buy", "sell", "hold"]
+ACTION_COLORS = {
+    "buy": "#0f766e",
+    "sell": "#b45309",
+    "hold": "#64748b",
+}
+
 
 def _inject_css() -> None:
     st.markdown(
         """
         <style>
             :root {
-                --bg: #f5f2ec;
-                --panel: rgba(255, 255, 255, 0.82);
-                --panel-border: rgba(44, 54, 57, 0.10);
-                --ink: #1f2a2e;
-                --muted: #6a7477;
-                --accent: #1f7a6b;
-                --accent-2: #c67c3a;
-                --accent-3: #8ea7b5;
+                --bg: #eef2f6;
+                --panel: rgba(255, 255, 255, 0.92);
+                --panel-strong: rgba(255, 255, 255, 0.98);
+                --panel-border: rgba(15, 23, 42, 0.10);
+                --ink: #0f172a;
+                --muted: #5b6472;
+                --accent: #0f766e;
+                --accent-2: #b45309;
+                --accent-3: #1d4ed8;
+                --success: #15803d;
+                --danger: #b42318;
             }
 
             .stApp {
                 background:
-                    radial-gradient(circle at top left, rgba(31, 122, 107, 0.10), transparent 30%),
-                    radial-gradient(circle at top right, rgba(198, 124, 58, 0.08), transparent 28%),
-                    linear-gradient(180deg, #f7f4ef 0%, #f5f2ec 45%, #eef1ef 100%);
+                    radial-gradient(circle at top left, rgba(15, 118, 110, 0.12), transparent 30%),
+                    radial-gradient(circle at top right, rgba(29, 78, 216, 0.10), transparent 28%),
+                    linear-gradient(180deg, #f8fafc 0%, #eef2f6 46%, #e8edf3 100%);
                 color: var(--ink);
+            }
+
+            section[data-testid="stSidebar"] {
+                background: linear-gradient(180deg, rgba(248, 250, 252, 0.98), rgba(241, 245, 249, 0.96));
+                border-right: 1px solid var(--panel-border);
+            }
+
+            section[data-testid="stSidebar"] > div {
+                padding-top: 1.2rem;
+            }
+
+            section[data-testid="stSidebar"] .stButton button {
+                border-radius: 999px;
+                background: var(--ink);
+                color: white;
+                border: 1px solid rgba(15, 23, 42, 0.12);
+            }
+
+            section[data-testid="stSidebar"] .stButton button:hover {
+                background: #1e293b;
+                border-color: rgba(15, 23, 42, 0.20);
             }
 
             .hero {
                 padding: 1.3rem 1.4rem 1.1rem;
                 border-radius: 24px;
-                background: linear-gradient(135deg, rgba(255,255,255,0.88), rgba(245, 248, 246, 0.82));
+                background: linear-gradient(135deg, rgba(255,255,255,0.98), rgba(241, 245, 249, 0.90));
                 border: 1px solid var(--panel-border);
-                box-shadow: 0 20px 55px rgba(17, 24, 39, 0.08);
+                box-shadow: 0 20px 55px rgba(15, 23, 42, 0.08);
                 animation: rise 450ms ease-out both;
             }
 
@@ -94,7 +125,7 @@ def _inject_css() -> None:
                 border-radius: 20px;
                 background: var(--panel);
                 border: 1px solid var(--panel-border);
-                box-shadow: 0 12px 30px rgba(17, 24, 39, 0.06);
+                box-shadow: 0 12px 30px rgba(15, 23, 42, 0.07);
                 min-height: 100%;
                 transition: transform 180ms ease, box-shadow 180ms ease;
                 animation: rise 400ms ease-out both;
@@ -102,7 +133,7 @@ def _inject_css() -> None:
 
             .card:hover {
                 transform: translateY(-2px);
-                box-shadow: 0 18px 36px rgba(17, 24, 39, 0.10);
+                box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
             }
 
             .card-label {
@@ -129,8 +160,20 @@ def _inject_css() -> None:
 
             .section-title {
                 margin: 0.8rem 0 0.3rem;
-                font-size: 1.08rem;
-                letter-spacing: -0.02em;
+                font-size: 0.86rem;
+                letter-spacing: 0.14em;
+                text-transform: uppercase;
+                color: var(--muted);
+            }
+
+            [data-testid="stDataFrame"] {
+                border-radius: 18px;
+                overflow: hidden;
+                border: 1px solid var(--panel-border);
+            }
+
+            [data-testid="stTabs"] button {
+                font-weight: 600;
             }
 
             @keyframes rise {
@@ -148,6 +191,16 @@ def _format_money(value: Any) -> str:
         return f"${float(value):,.2f}"
     except Exception:
         return "n/a"
+
+
+def _format_signed_money(value: Any) -> str:
+    try:
+        amount = float(value)
+    except Exception:
+        return "n/a"
+
+    prefix = "+" if amount >= 0 else "-"
+    return f"{prefix}${abs(amount):,.2f}"
 
 
 def _format_percent(value: Any) -> str:
@@ -175,6 +228,100 @@ def _render_card(label: str, value: str, caption: str, accent: str = "var(--acce
         """,
         unsafe_allow_html=True,
     )
+
+
+def _style_chart(chart: Any) -> Any:
+    if alt is None:
+        return chart
+
+    return chart.configure_view(strokeOpacity=0).configure_axis(
+        labelColor="#334155",
+        titleColor="#0f172a",
+        gridColor="#e2e8f0",
+        domainColor="#cbd5e1",
+        tickColor="#cbd5e1",
+    ).configure_legend(
+        labelColor="#334155",
+        titleColor="#0f172a",
+    )
+
+
+def _profit_summary(frame: pd.DataFrame) -> dict[str, Any]:
+    empty_summary = {
+        "first_equity": None,
+        "last_equity": None,
+        "portfolio_pl": 0.0,
+        "portfolio_pl_pct": None,
+        "buy_spend": 0.0,
+        "sell_proceeds": 0.0,
+        "net_trade_flow": 0.0,
+        "status": "No trade history",
+        "accent": "var(--ink)",
+    }
+
+    if frame.empty:
+        return empty_summary
+
+    executed_frame = frame[frame["executed"]].copy()
+    if executed_frame.empty:
+        return empty_summary
+
+    equity_source = executed_frame.get("portfolio_total_usd")
+    equity_series = pd.to_numeric(equity_source, errors="coerce") if equity_source is not None else pd.Series(dtype=float)
+    if equity_series.empty or equity_series.isna().all():
+        if {"portfolio_cash", "portfolio_btc", "current_price"}.issubset(executed_frame.columns):
+            equity_series = (
+                pd.to_numeric(executed_frame["portfolio_cash"], errors="coerce")
+                + pd.to_numeric(executed_frame["portfolio_btc"], errors="coerce") * pd.to_numeric(executed_frame["current_price"], errors="coerce")
+            )
+
+    equity_series = equity_series.dropna()
+    first_equity = float(equity_series.iloc[0]) if not equity_series.empty else None
+    last_equity = float(equity_series.iloc[-1]) if not equity_series.empty else None
+
+    portfolio_pl = 0.0
+    portfolio_pl_pct = None
+    if first_equity is not None and last_equity is not None:
+        portfolio_pl = last_equity - first_equity
+        if first_equity:
+            portfolio_pl_pct = portfolio_pl / first_equity
+
+    buy_spend = float(
+        pd.to_numeric(executed_frame.loc[executed_frame["action"] == "buy", "value"], errors="coerce")
+        .fillna(0.0)
+        .sum()
+    )
+
+    cash_source = executed_frame.get("portfolio_cash")
+    cash_series = pd.to_numeric(cash_source, errors="coerce") if cash_source is not None else pd.Series(dtype=float)
+    sell_proceeds = 0.0
+    if not cash_series.empty and not cash_series.isna().all():
+        cash_delta = cash_series.diff()
+        sell_proceeds = float(cash_delta[cash_delta > 0].fillna(0.0).sum())
+
+    net_trade_flow = sell_proceeds - buy_spend
+
+    if portfolio_pl > 0:
+        status = "Profit"
+        accent = "var(--success)"
+    elif portfolio_pl < 0:
+        status = "Loss"
+        accent = "var(--danger)"
+    else:
+        status = "Break-even"
+        accent = "var(--ink)"
+
+    return {
+        "first_equity": first_equity,
+        "last_equity": last_equity,
+        "portfolio_pl": portfolio_pl,
+        "portfolio_pl_pct": portfolio_pl_pct,
+        "buy_spend": buy_spend,
+        "sell_proceeds": sell_proceeds,
+        "net_trade_flow": net_trade_flow,
+        "status": status,
+        "accent": accent,
+    }
 
 
 @st.cache_data(ttl=60)
@@ -277,6 +424,7 @@ else:
     all_summary = summarize_trade_frame(frame)
     today_summary = summarize_trade_frame(today_frame)
     week_summary = summarize_trade_frame(week_frame)
+    profit_summary = _profit_summary(frame)
 
     top_cards = st.columns(4)
     with top_cards[0]:
@@ -321,6 +469,18 @@ else:
     with pulse_cards[3]:
         _render_card("Today RSI", _format_number(today_summary["avg_rsi"]), "Average RSI from the logged trade contexts.", accent="var(--ink)")
 
+    st.markdown('<div class="section-title">Profit snapshot</div>', unsafe_allow_html=True)
+    profit_cards = st.columns(3)
+    with profit_cards[0]:
+        profit_caption = "No realized equity baseline yet." if profit_summary["first_equity"] is None else f"{profit_summary['status']} of {_format_signed_money(profit_summary['portfolio_pl'])} since the first logged trade."
+        if profit_summary["portfolio_pl_pct"] is not None:
+            profit_caption += f" ({profit_summary['portfolio_pl_pct']:+.2%})"
+        _render_card("Portfolio P/L", _format_money(profit_summary["portfolio_pl"]), profit_caption, accent=profit_summary["accent"])
+    with profit_cards[1]:
+        _render_card("Buy spend", _format_money(profit_summary["buy_spend"]), "Total cash deployed into BTC purchases in the selected history.", accent="var(--accent-2)")
+    with profit_cards[2]:
+        _render_card("Sell proceeds", _format_money(profit_summary["sell_proceeds"]), "Cash returned by executed sells in the selected history.", accent="var(--accent-3)")
+
     tabs = st.tabs(["Overview", "Patterns", "Ledger", "Raw"])
 
     with tabs[0]:
@@ -340,12 +500,12 @@ else:
                         .encode(
                             x=alt.X("timestamp:T", title="Time"),
                             y=alt.Y("current_price:Q", title="BTC price"),
-                            color=alt.Color("action:N", scale=alt.Scale(domain=["buy", "sell", "hold"], range=["#1f7a6b", "#c67c3a", "#75818b"])),
+                            color=alt.Color("action:N", scale=alt.Scale(domain=ACTION_DOMAIN, range=[ACTION_COLORS[action] for action in ACTION_DOMAIN])),
                             tooltip=["timestamp:T", "action:N", "strategy:N", "reason:N", alt.Tooltip("current_price:Q", format=",.2f"), alt.Tooltip("price_change_pct:Q", format=".2%"), alt.Tooltip("opinion_confidence:Q", format=".2%")],
                         )
                         .properties(height=320)
                     )
-                    st.altair_chart(price_chart, use_container_width=True)
+                    st.altair_chart(_style_chart(price_chart), use_container_width=True)
                 else:
                     st.line_chart(overview_frame.set_index("timestamp")["current_price"], height=320)
 
@@ -359,12 +519,12 @@ else:
                         .encode(
                             x=alt.X("action:N", title=None, sort=["buy", "sell", "hold"]),
                             y=alt.Y("count:Q", title="Trades"),
-                            color=alt.Color("action:N", scale=alt.Scale(domain=["buy", "sell", "hold"], range=["#1f7a6b", "#c67c3a", "#75818b"])),
+                            color=alt.Color("action:N", scale=alt.Scale(domain=ACTION_DOMAIN, range=[ACTION_COLORS[action] for action in ACTION_DOMAIN])),
                             tooltip=["action:N", "count:Q"],
                         )
                         .properties(height=320)
                     )
-                    st.altair_chart(action_chart, use_container_width=True)
+                    st.altair_chart(_style_chart(action_chart), use_container_width=True)
                 else:
                     st.bar_chart(action_chart_frame.set_index("action")["count"], height=320)
 
@@ -375,7 +535,7 @@ else:
                 if alt is not None and not daily_frame.empty:
                     daily_chart = (
                         alt.Chart(daily_frame)
-                        .mark_area(line={"color": "#1f7a6b"}, color="rgba(31, 122, 107, 0.20)")
+                        .mark_area(line={"color": ACTION_COLORS["buy"]}, color="rgba(15, 118, 110, 0.20)")
                         .encode(
                             x=alt.X("trade_date:T", title="Date"),
                             y=alt.Y("count:Q", title="Trades"),
@@ -383,7 +543,7 @@ else:
                         )
                         .properties(height=240)
                     )
-                    st.altair_chart(daily_chart, use_container_width=True)
+                    st.altair_chart(_style_chart(daily_chart), use_container_width=True)
                 else:
                     st.line_chart(daily_frame.set_index("trade_date")["count"], height=240)
 
@@ -421,7 +581,7 @@ else:
                         )
                         .properties(height=300)
                     )
-                    st.altair_chart(heatmap, use_container_width=True)
+                    st.altair_chart(_style_chart(heatmap), use_container_width=True)
                 else:
                     st.dataframe(activity, use_container_width=True, hide_index=True)
 
