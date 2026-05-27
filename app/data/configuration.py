@@ -36,6 +36,8 @@ class Configuration:
         "DCA Amount",
         "Swing Buy Amount",
         "Swing Sell Amount",
+        "Buy Sensibility",
+        "Sell Sensibility"
     ]
 
     cache_refresh_interval = timedelta(minutes=1)
@@ -58,6 +60,8 @@ class Configuration:
         "Swing Sell Amount": "sell_amount",
         "Portfolio Value $": "portfolio_value",
         "Portfolio Value BTC": "portfolio_btc",
+        "Buy Sensibility" : "buy_sensibility",
+        "Sell Sensibility" : "sell_sensibility"
     }
 
     default_all = {
@@ -75,6 +79,8 @@ class Configuration:
         "DCA Amount": "500",
         "Swing Buy Amount": "250",
         "Swing Sell Amount": "10%",
+        "Buy Sensibility": "0.3",
+        "Sell Sensibility": "0.3"
     }
 
     default_portfolio = {

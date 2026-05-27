@@ -77,7 +77,9 @@ class TradingAgent:
             "macd_histogram": self.metrics.get_latest_value("MACD_histogram"),
             "atr": self.metrics.get_latest_value("ATR"),
             "buy_amount":self.configuration.all.get("buy_amount",250),
-            "sell_amount":self.configuration.all.get("sell_amount","10%"),
+            "sell_amount":self.configuration.all.get("sell_amount","10%").replace("%",""),
+            "buy_sensibility": self.configuration.all.get("buy_sensibility","0.3"),
+            "sell_sensibility": self.configuration.all.get("sell_sensibility","0.3")
         }
 
     def _check_balance(self, dollar_value = None, btc_value = None) -> bool:
@@ -193,13 +195,15 @@ class TradingAgent:
         # Get both model suggestion and numeric
         final_score = (model_score * 0.5) + (decision["metrics_score"] * 0.5)
 
-        # TODO: Configure sensibility threshold via config sheet
-        buy_trigger = final_score >= 0.3
-        sell_trigger = final_score <= - 0.3
+        buy_sensibility = float(decision["context"]["buy_sensibility"].replace(",","."))
+        sell_sensibility = float(decision["context"]["sell_sensibility"].replace(",","."))
+
+        buy_trigger = final_score >= buy_sensibility
+        sell_trigger = final_score <= - sell_sensibility
 
         # Base values definied on the config sheet
         buy_base_value = float(decision["context"]["buy_amount"])
-        sell_base_value = _parse_percent(decision["context"]["sell_amount"])
+        sell_base_value = _parse_percent(decision["context"]["sell_amount"].replace("%",""))
 
         dca_base_value = decision["context"]["dca_amount"]
 
