@@ -9,11 +9,6 @@ import json
 import datetime
 import asyncio
 
-try:
-    import requests
-except Exception:
-    requests = None
-
 # Helper Function
 # parse % into a fraction ('3%' -> 0.03)
 def _parse_percent(val, default_pct=0.03):

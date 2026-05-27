@@ -26,6 +26,14 @@ class TimeManager:
         self.last_dca, self.last_weekly_report, self.last_tick = self._load_last_data()
 
     def _time_info_path(self, file_name="time_info.json"):
+        override_path = os.getenv("TIME_INFO_PATH")
+        if override_path:
+            return Path(override_path)
+
+        state_dir = os.getenv("APP_STATE_DIR")
+        if state_dir:
+            return Path(state_dir) / file_name
+
         return Path(__file__).resolve().parent.parent / "data" / file_name
 
     def _load_last_data(self, file_name="time_info.json"):

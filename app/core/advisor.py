@@ -10,11 +10,11 @@ class Advisor:
     def __init__(self, model_name="llama-3.3-70b-versatile"):
 
         load_dotenv()
-        GROQ_KEY_PATH = os.getenv("GROQ_KEY_PATH")
+        GROQ_KEY = os.getenv("GROQ_KEY")
 
         self.model_name = model_name
         self.client = Groq(
-            api_key=GROQ_KEY_PATH
+            api_key=GROQ_KEY
         )
 
     def analyze(self, context):
