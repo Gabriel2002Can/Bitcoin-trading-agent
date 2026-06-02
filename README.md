@@ -73,23 +73,29 @@ The system is modular and follows a clean separation of concerns:
 ### Python Dependencies (`requirements.txt`)
 
 ```txt
-uvicorn[standard]
-streamlit
-requests
-python-dotenv
-pandas
-yfinance
-gspread
-groq
-python-telegram-bot
+uvicorn[standard]==0.46.0
+streamlit==1.57.0
+requests==2.32.5
+python-dotenv==1.2.2
+pandas==2.3.3
+yfinance==1.3.0
+gspread==6.2.1
+groq==1.2.0
+python-telegram-bot==22.7
 ```
 ### External Services Setup
 
-- Groq API Key (for LLM advisor)
-- Telegram Bot (for real-time alerts)
-- Gmail Account with App Password (for weekly reports)
-- Google Service Account (for Google Sheets config) — JSON key file
-- Google Sheet with the expected columns (see Configuration.options)
+#### Groq API Key (for LLM advisor)
+1. Create an account at Groq APIs: https://console.groq.com/home
+
+2. Go to API Keys: https://console.groq.com/keys, create a new API key and record the secret key.
+
+3. Substitute GROQ_KEY on the env file to the recorded API key
+
+### Telegram Bot (for real-time alerts)
+###  Gmail Account with App Password (for weekly reports)
+###  Google Service Account (for Google Sheets config) — JSON key file
+###  Google Sheet with the expected columns (see Configuration.options)
 
 ### Environment Variables (.env)
 
