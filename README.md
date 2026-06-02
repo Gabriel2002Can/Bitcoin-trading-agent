@@ -73,39 +73,86 @@ The system is modular and follows a clean separation of concerns:
 ### Python Dependencies (`requirements.txt`)
 
 ```txt
-uvicorn[standard]
-streamlit
-requests
-python-dotenv
-pandas
-yfinance
-gspread
-groq
-python-telegram-bot
+uvicorn[standard]==0.46.0
+streamlit==1.57.0
+requests==2.32.5
+python-dotenv==1.2.2
+pandas==2.3.3
+yfinance==1.3.0
+gspread==6.2.1
+groq==1.2.0
+python-telegram-bot==22.7
 ```
 ### External Services Setup
 
-- Groq API Key (for LLM advisor)
-- Telegram Bot (for real-time alerts)
-- Gmail Account with App Password (for weekly reports)
-- Google Service Account (for Google Sheets config) — JSON key file
-- Google Sheet with the expected columns (see Configuration.options)
+#### Groq API Key (for LLM advisor)
+1. Create an account at Groq APIs: https://console.groq.com/home.
 
-### Environment Variables (.env)
+2. Go to API Keys: https://console.groq.com/keys, create a new API key and record the secret key.
 
-Copy .env.example to .env and fill in:
-```env
-GROQ_KEY_PATH=replace-with-your-groq-api-key
-TELEGRAM_BOT_TOKEN=replace-with-your-telegram-bot-token
-TELEGRAM_CHAT_ID=replace-with-your-telegram-chat-id
-GMAIL_ADDRESS=replace-with-your-gmail-address
-GMAIL_APP_PASSWORD=replace-with-your-gmail-app-password
-GMAIL_TO_EMAIL=replace-with-your-report-recipient
-BOT_CREDENTIALS_PATH=secrets/google-credentials.json
-```
-Place your Google service account JSON at secrets/google-credentials.json.
+3. In your `.env` file, set the `GROQ_KEY` variable to the copied API key.
 
 ---
+
+#### Telegram Bot (for real-time alerts)
+1. Log in to your Telegram account.
+
+2. Open a chat with **BotFather**, type /newbot, and follow the instructions to create a new bot. Copy the bot token provided.
+
+3. To retrieve your Chat ID:
+   - Navigate to `https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getUpdates` (replace <YOUR_BOT_TOKEN> with your actual token).
+   - Send any message to your bot (you can find the direct chat link in BotFather’s response).
+   - Reload the page. In the JSON response, locate your `chat_id` (usually under result[0].message.chat.id).
+
+4. In your `.env` file:
+   - Set `TELEGRAM_BOT_TOKEN` to the token received from BotFather.
+   - Set `TELEGRAM_CHAT_ID` to the chat ID obtained from the JSON response.
+  
+---
+
+####  Google Sheet with the expected columns (see Configuration.options)
+1. Make a copy of this template Google Sheet: https://docs.google.com/spreadsheets/d/1QJig5aCdzKrp1wfKpPtMHTy-gtvz8-nGq9-VHwFRjUc/edit?usp=sharing.
+
+2. Customize the parameter values to your preference, but do **not change the cell locations or structure**.
+
+---
+
+####  Google Service Account (for Google Sheets config) — JSON key file
+> **Note:** These steps are adapted from the official gspread authentication documentation. If you encounter any issues, refer to the official guide for the most up-to-date instructions.
+
+1. Go to the https://console.cloud.google.com/apis/dashboard and create a new project (or select the one you already have).
+
+2. In the search bar labeled “Search for APIs and Services”, enable the following APIs:
+   - Google Drive API
+   - Google Sheets API
+
+4. Navigate to APIs & Services > Credentials, then click Create credentials > Service account.
+
+5. Fill in the service account details and complete the creation process.
+
+6. Click Manage service accounts, locate your newly created service account, click the three-dot menu (⋮) next to it, and select Manage keys > Add Key > Create new key.
+
+7. Choose JSON as the key type and click **Create**. Download the JSON file.
+
+8. Place the downloaded JSON file in the project at` secrets/google-credentials.json` (create the secrets folder if it does not exist).
+
+9. Open your Google Sheet and share it with the `client_email` address found inside the JSON file.
+
+10. In your `.env` file, set `BOT_CREDENTIALS_PATH` to the path of the JSON file (e.g., `secrets/google-credentials.json`).
+
+---
+
+####  Gmail Account with App Password (for weekly reports)
+1. Ensure that **2-Step Verification** is enabled on your Google account.
+
+2. Go to Google App Passwords and sign in with the same account: https://myaccount.google.com/apppasswords.
+
+3. Create a new app and record the password.
+
+4. In your `.env` file:
+   - Set `GMAIL_APP_PASSWORD` to the generated app password.
+   - Set `GMAIL_ADDRESS` to the Gmail address that will send the weekly reports (creating a dedicated bot email is recommended).
+   - Set `GMAIL_TO_EMAIL` to the email address that will receive the reports.
 
 ## How to Run the Project Locally
 
